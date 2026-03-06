@@ -143,9 +143,9 @@ export default function TaskGenerator() {
               <h3 className="text-lg font-bold text-primary mb-4">Logo Velloso</h3>
               <div className="flex justify-center mb-4">
                 <img 
-                  src="https://d2xsxph8kpxj0f.cloudfront.net/310519663399377122/PxMC8QzTeavCuPqp6NYMem/Capturadetela2025-11-13155450_8257b24a.png" 
-                  alt="Velloso Cidadania Logo" 
-                  className="h-40 w-auto"
+                  src="https://d2xsxph8kpxj0f.cloudfront.net/310519663399377122/PxMC8QzTeavCuPqp6NYMem/globo_98a48fb9.png" 
+                  alt="Globo Velloso" 
+                  className="h-32 w-auto"
                 />
               </div>
               <p className="text-sm text-muted-foreground mb-4">

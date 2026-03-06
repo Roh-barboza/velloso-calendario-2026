@@ -106,9 +106,9 @@ export default function Home() {
         <div className="text-center mb-12">
           <div className="mb-6 flex justify-center">
             <img 
-              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663399377122/PxMC8QzTeavCuPqp6NYMem/Capturadetela2025-11-13155450_8257b24a.png" 
-              alt="Velloso Cidadania Logo" 
-              className="h-32 w-auto"
+              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663399377122/PxMC8QzTeavCuPqp6NYMem/globo_98a48fb9.png" 
+              alt="Globo Velloso" 
+              className="h-24 w-auto"
             />
           </div>
           
