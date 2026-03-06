@@ -7,6 +7,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import TaskGenerator from "./pages/TaskGenerator";
 import CRM from "./pages/CRM";
+import Intranet from "./pages/Intranet";
 
 
 function Router() {
@@ -15,6 +16,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/tarefas" component={TaskGenerator} />
       <Route path="/crm" component={CRM} />
+      <Route path="/intranet" component={Intranet} />
       <Route path="/404" component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />

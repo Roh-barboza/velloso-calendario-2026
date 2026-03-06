@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Sparkles, Gift, ListTodo } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ListTodo, Users, LayoutDashboard } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { EVENTS_BY_MONTH, MONTH_NAMES, type EventType } from '@/lib/events';
 
@@ -106,9 +106,10 @@ export default function Home() {
         <div className="text-center mb-12">
           <div className="mb-6 flex justify-center">
             <img 
-              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663399377122/PxMC8QzTeavCuPqp6NYMem/globo_98a48fb9.png" 
+              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663399377122/PxMC8QzTeavCuPqp6NYMem/globo_transparente_b89ad2b6.png" 
               alt="Globo Velloso" 
               className="h-24 w-auto"
+              style={{ mixBlendMode: 'multiply' }}
             />
           </div>
           
@@ -127,13 +128,27 @@ export default function Home() {
           </p>
           
           {/* Navigation Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center flex-wrap">
             <button
               onClick={() => navigate('/tarefas')}
               className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-semibold"
             >
               <ListTodo className="w-5 h-5" />
               Gerador de Tarefas
+            </button>
+            <button
+              onClick={() => navigate('/crm')}
+              className="flex items-center justify-center gap-2 px-6 py-3 bg-white text-primary border-2 border-primary rounded-lg hover:bg-primary/5 transition-colors font-semibold"
+            >
+              <Users className="w-5 h-5" />
+              Processos / CRM
+            </button>
+            <button
+              onClick={() => navigate('/intranet')}
+              className="flex items-center justify-center gap-2 px-6 py-3 bg-[#ce2b37] text-white rounded-lg hover:bg-[#b02030] transition-colors font-semibold"
+            >
+              <LayoutDashboard className="w-5 h-5" />
+              Intranet
             </button>
           </div>
         </div>
