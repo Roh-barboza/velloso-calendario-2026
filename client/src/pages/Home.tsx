@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight, Calendar, Sparkles, Gift, ListTodo } from 'lucide-react';
 import { useLocation } from 'wouter';
-import { useAuth } from '@/_core/hooks/useAuth';
 import { EVENTS_BY_MONTH, MONTH_NAMES, type EventType } from '@/lib/events';
 
 interface SelectedDay {
@@ -48,10 +47,6 @@ const getEventTypeLabel = (type: EventType) => {
 };
 
 export default function Home() {
-  // The userAuth hooks provides authentication state
-  // To implement login/logout functionality, simply call logout() or redirect to getLoginUrl()
-  let { user, loading, error, isAuthenticated, logout } = useAuth();
-
   const [, navigate] = useLocation();
   const [currentMonth, setCurrentMonth] = useState(3); // Março
   const [selectedDay, setSelectedDay] = useState<SelectedDay | null>(null);
@@ -111,7 +106,7 @@ export default function Home() {
         <div className="text-center mb-12">
           <div className="mb-6 flex justify-center">
             <img 
-              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663399377122/PxMC8QzTeavCuPqp6NYMem/globo_transparent_214d48ec.png" 
+              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663399377122/PxMC8QzTeavCuPqp6NYMem/globo_98a48fb9.png" 
               alt="Globo Velloso" 
               className="h-24 w-auto"
             />
@@ -140,14 +135,6 @@ export default function Home() {
               <ListTodo className="w-5 h-5" />
               Gerador de Tarefas
             </button>
-            {user && (
-              <button
-                onClick={() => navigate('/intranet')}
-                className="flex items-center justify-center gap-2 px-6 py-3 bg-secondary text-primary rounded-lg hover:bg-secondary/80 transition-colors font-semibold border-2 border-primary"
-              >
-                Intranet
-              </button>
-            )}
           </div>
         </div>
 
