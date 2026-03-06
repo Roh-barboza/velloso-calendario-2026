@@ -105,13 +105,11 @@ export default function Home() {
         {/* Logo and Title */}
         <div className="text-center mb-12">
           <div className="mb-6 flex justify-center">
-            <svg width="100" height="100" viewBox="0 0 200 200" className="text-primary">
-              <circle cx="100" cy="100" r="95" fill="none" stroke="currentColor" strokeWidth="2" />
-              <path d="M 60 80 Q 70 70 80 75 Q 90 70 100 75 Q 110 70 120 75 Q 130 70 140 80" 
-                    fill="none" stroke="currentColor" strokeWidth="2" />
-              <path d="M 70 120 Q 85 110 100 115 Q 115 110 130 120" 
-                    fill="none" stroke="currentColor" strokeWidth="2" />
-            </svg>
+            <img 
+              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663399377122/PxMC8QzTeavCuPqp6NYMem/Capturadetela2025-11-13155450_8257b24a.png" 
+              alt="Velloso Cidadania Logo" 
+              className="h-32 w-auto"
+            />
           </div>
           
           <h1 className="text-5xl md:text-6xl font-bold text-primary mb-2">
