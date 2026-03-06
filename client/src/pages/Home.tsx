@@ -1,58 +1,68 @@
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Sparkles, Gift, ListTodo } from 'lucide-react';
+import { useLocation } from 'wouter';
+import { EVENTS_BY_MONTH, MONTH_NAMES, type EventType } from '@/lib/events';
 
-interface CalendarEvent {
+interface SelectedDay {
+  month: number;
   day: number;
-  names: string[];
 }
-
-const EVENTS: Record<number, string[]> = {
-  1: ["MARIANE SANTOS CARVALHO"],
-  2: ["FABÍOLA STEFANY LIMA VALADARES"],
-  4: ["CRISTIANE LOPES DE ASSUNÇÃO"],
-  5: ["Thaina Vicente"],
-  6: ["Noah Yohan Massaneiro Soares"],
-  7: ["Isabella Claro Grizzo", "Olivia Harue Goncalves", "Julie Correia Lula"],
-  8: ["Lala perin Soethe", "Dia da Mulher"],
-  11: ["Janaina Carla Abra Santos", "BEATRIZ FINCO IRIZAGA DA COSTA"],
-  12: ["Ana Luiza de Oliveira Domingues"],
-  14: ["Lucas Biondo"],
-  15: ["Dia do Consumidor"],
-  16: ["Adilço Norberto Melotto"],
-  18: ["IZABELLA ZIMMERMANN MACIEL"],
-  19: ["Joiciany Pereira Cândido", "Dia do Artesão"],
-  20: ["Juliana Passalacqua Ricci"],
-  21: ["LUCA MENEGOTTO CASTILLO", "RODRIGO SOARES SANTANA JUNIOR"],
-  22: ["Giselle Maria Coelho Schelbauer", "Débora Cerretti", "Dia Mundial da Água"],
-  23: ["Adolfo Amaral Franco"],
-  25: ["Richard Cinacchi Gracetti", "Dantedì"],
-  26: ["Rodrigo Brolez Antonello"],
-  27: ["Jonathan Diego nava"],
-  29: ["Jean Felipe Micheletto Costa", "Douglas Barbarino"],
-  31: ["Willian Costa Souza"],
-};
 
 const WEEKDAYS = ["SEG", "TER", "QUA", "QUI", "SEX", "SÁB", "DOM"];
 
-export default function Home() {
-  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+// Função para obter o dia da semana do primeiro dia do mês
+const getFirstDayOfMonth = (month: number, year: number = 2026) => {
+  return new Date(year, month - 1, 1).getDay();
+};
 
-  // March 2026 starts on Sunday (day 1 = Sunday)
-  // First day of March 2026 is Sunday
-  const daysInMonth = 31;
-  const firstDayOfWeek = 0; // 0 = Sunday, but we need Monday as first
-  
-  // Adjust: March 1, 2026 is a Sunday, so we need to shift
-  const startingDayIndex = 6; // Sunday = 6 in our 0-indexed weekday array (SEG=0, DOM=6)
-  
+// Função para obter o número de dias no mês
+const getDaysInMonth = (month: number, year: number = 2026) => {
+  return new Date(year, month, 0).getDate();
+};
+
+const getEventTypeIcon = (type: EventType) => {
+  switch (type) {
+    case 'birthday':
+      return '🎂';
+    case 'holiday':
+      return '🇮🇹';
+    case 'special':
+      return '⭐';
+    default:
+      return '📅';
+  }
+};
+
+const getEventTypeLabel = (type: EventType) => {
+  switch (type) {
+    case 'birthday':
+      return 'Aniversário';
+    case 'holiday':
+      return 'Feriado/Comemoração';
+    case 'special':
+      return 'Evento Especial';
+    default:
+      return 'Evento';
+  }
+};
+
+export default function Home() {
+  const [, navigate] = useLocation();
+  const [currentMonth, setCurrentMonth] = useState(3); // Março
+  const [selectedDay, setSelectedDay] = useState<SelectedDay | null>(null);
+  const year = 2026;
+
+  const monthEvents = EVENTS_BY_MONTH[currentMonth] || {};
+  const firstDayOfWeek = getFirstDayOfMonth(currentMonth, year);
+  const daysInMonth = getDaysInMonth(currentMonth, year);
+
+  // Ajustar para segunda-feira como primeiro dia
+  const adjustedFirstDay = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
+
   const calendarDays: (number | null)[] = [];
-  
-  // Add empty slots for days before the month starts
-  for (let i = 0; i < startingDayIndex; i++) {
+  for (let i = 0; i < adjustedFirstDay; i++) {
     calendarDays.push(null);
   }
-  
-  // Add days of the month
   for (let i = 1; i <= daysInMonth; i++) {
     calendarDays.push(i);
   }
@@ -62,7 +72,23 @@ export default function Home() {
     weeks.push(calendarDays.slice(i, i + 7));
   }
 
-  const selectedDayEvents = selectedDay && EVENTS[selectedDay] ? EVENTS[selectedDay] : [];
+  const selectedDayEvents = selectedDay && selectedDay.month === currentMonth 
+    ? monthEvents[selectedDay.day] || [] 
+    : [];
+
+  const hasSpecialEvents = Object.values(monthEvents).some(events =>
+    events.some(e => e.type !== 'birthday')
+  );
+
+  const nextMonth = () => {
+    setCurrentMonth(currentMonth === 12 ? 1 : currentMonth + 1);
+    setSelectedDay(null);
+  };
+
+  const prevMonth = () => {
+    setCurrentMonth(currentMonth === 1 ? 12 : currentMonth - 1);
+    setSelectedDay(null);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-secondary">
@@ -95,12 +121,23 @@ export default function Home() {
             CIDADANIA
           </p>
           
-          <h2 className="text-3xl md:text-4xl font-bold text-primary mb-2">
+          <h2 className="text-3xl md:text-4xl font-bold text-primary mb-6">
             Calendário de Eventos
           </h2>
-          <p className="text-xl text-muted-foreground">
-            Março 2026
+          <p className="text-xl text-muted-foreground mb-8">
+            2026
           </p>
+          
+          {/* Navigation Buttons */}
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <button
+              onClick={() => navigate('/tarefas')}
+              className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-semibold"
+            >
+              <ListTodo className="w-5 h-5" />
+              Gerador de Tarefas
+            </button>
+          </div>
         </div>
 
         {/* Main Content */}
@@ -108,6 +145,29 @@ export default function Home() {
           {/* Calendar Grid */}
           <div className="lg:col-span-2">
             <div className="bg-white rounded-lg shadow-lg p-6 md:p-8">
+              {/* Month Navigation */}
+              <div className="flex items-center justify-between mb-6">
+                <button
+                  onClick={prevMonth}
+                  className="p-2 hover:bg-secondary rounded-lg transition-colors"
+                  aria-label="Mês anterior"
+                >
+                  <ChevronLeft className="w-6 h-6 text-primary" />
+                </button>
+                
+                <h3 className="text-2xl font-bold text-primary">
+                  {MONTH_NAMES[currentMonth - 1]}
+                </h3>
+                
+                <button
+                  onClick={nextMonth}
+                  className="p-2 hover:bg-secondary rounded-lg transition-colors"
+                  aria-label="Próximo mês"
+                >
+                  <ChevronRight className="w-6 h-6 text-primary" />
+                </button>
+              </div>
+
               {/* Weekday Headers */}
               <div className="grid grid-cols-7 gap-2 mb-4">
                 {WEEKDAYS.map((day) => (
@@ -124,40 +184,77 @@ export default function Home() {
               <div className="space-y-2">
                 {weeks.map((week, weekIdx) => (
                   <div key={weekIdx} className="grid grid-cols-7 gap-2">
-                    {week.map((day, dayIdx) => (
-                      <button
-                        key={`${weekIdx}-${dayIdx}`}
-                        onClick={() => day && setSelectedDay(day)}
-                        className={`
-                          aspect-square rounded-lg p-2 text-sm font-semibold
-                          transition-all duration-200 relative
-                          ${!day ? 'bg-transparent' : ''}
-                          ${day && !EVENTS[day]
-                            ? 'bg-secondary text-foreground hover:bg-muted cursor-pointer border border-border'
-                            : ''
-                          }
-                          ${day && EVENTS[day]
-                            ? 'bg-gradient-to-br from-primary/10 to-primary/5 text-primary hover:from-primary/20 hover:to-primary/10 cursor-pointer border-2 border-primary'
-                            : ''
-                          }
-                          ${selectedDay === day
-                            ? 'ring-2 ring-primary ring-offset-2'
-                            : ''
-                          }
-                        `}
-                      >
-                        {day && (
-                          <>
-                            <div>{day}</div>
-                            {EVENTS[day] && (
-                              <div className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full"></div>
-                            )}
-                          </>
-                        )}
-                      </button>
-                    ))}
+                    {week.map((day, dayIdx) => {
+                      const dayEvents = day ? monthEvents[day] : null;
+                      const hasEvents = dayEvents && dayEvents.length > 0;
+                      const hasSpecialEvent = hasEvents && dayEvents.some(e => e.type !== 'birthday');
+                      const isSelected = selectedDay?.day === day && selectedDay?.month === currentMonth;
+
+                      return (
+                        <button
+                          key={`${weekIdx}-${dayIdx}`}
+                          onClick={() => day && setSelectedDay({ month: currentMonth, day })}
+                          className={`
+                            aspect-square rounded-lg p-2 text-sm font-semibold
+                            transition-all duration-200 relative
+                            ${!day ? 'bg-transparent' : ''}
+                            ${day && !hasEvents
+                              ? 'bg-secondary text-foreground hover:bg-muted cursor-pointer border border-border'
+                              : ''
+                            }
+                            ${day && hasSpecialEvent
+                              ? 'bg-gradient-to-br from-[#ce2b37]/15 to-[#ce2b37]/5 text-primary hover:from-[#ce2b37]/25 hover:to-[#ce2b37]/15 cursor-pointer border-2 border-[#ce2b37]'
+                              : ''
+                            }
+                            ${day && hasEvents && !hasSpecialEvent
+                              ? 'bg-gradient-to-br from-primary/10 to-primary/5 text-primary hover:from-primary/20 hover:to-primary/10 cursor-pointer border-2 border-primary'
+                              : ''
+                            }
+                            ${isSelected
+                              ? 'ring-2 ring-primary ring-offset-2'
+                              : ''
+                            }
+                          `}
+                        >
+                          {day && (
+                            <>
+                              <div>{day}</div>
+                              {hasEvents && (
+                                <div className="absolute top-1 right-1 flex gap-0.5">
+                                  {hasSpecialEvent && (
+                                    <div className="w-2 h-2 bg-[#ce2b37] rounded-full"></div>
+                                  )}
+                                  {dayEvents.some(e => e.type === 'birthday') && (
+                                    <div className="w-2 h-2 bg-primary rounded-full"></div>
+                                  )}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 ))}
+              </div>
+
+              {/* Legend */}
+              <div className="mt-8 pt-6 border-t border-border">
+                <h4 className="font-bold text-primary text-sm mb-3">Legenda</h4>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded bg-gradient-to-br from-primary/10 to-primary/5 border-2 border-primary"></div>
+                    <span>Aniversários</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded bg-gradient-to-br from-[#ce2b37]/15 to-[#ce2b37]/5 border-2 border-[#ce2b37]"></div>
+                    <span>Eventos Especiais</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded bg-secondary border border-border"></div>
+                    <span>Sem eventos</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -166,7 +263,7 @@ export default function Home() {
           <div className="lg:col-span-1">
             <div className="bg-white rounded-lg shadow-lg p-6 md:p-8 sticky top-4">
               <h3 className="text-2xl font-bold text-primary mb-4">
-                {selectedDay ? `${selectedDay} de Março` : 'Selecione um dia'}
+                {selectedDay ? `${selectedDay.day} de ${MONTH_NAMES[currentMonth - 1]}` : 'Selecione um dia'}
               </h3>
               
               <div className="border-t-2 border-primary pt-4">
@@ -177,13 +274,21 @@ export default function Home() {
                         key={idx}
                         className={`
                           p-3 rounded-lg text-sm
-                          ${event.includes('Dia') || event.includes('Festa') || event.includes('Dantedì')
+                          ${event.type === 'special'
                             ? 'bg-[#ce2b37]/10 text-[#ce2b37] border border-[#ce2b37]/30'
+                            : event.type === 'holiday'
+                            ? 'bg-[#00924a]/10 text-[#00924a] border border-[#00924a]/30'
                             : 'bg-primary/10 text-primary border border-primary/30'
                           }
                         `}
                       >
-                        {event}
+                        <div className="flex items-start gap-2">
+                          <span className="text-lg">{getEventTypeIcon(event.type)}</span>
+                          <div>
+                            <div className="font-semibold">{event.name}</div>
+                            <div className="text-xs opacity-75">{getEventTypeLabel(event.type)}</div>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -197,59 +302,49 @@ export default function Home() {
                   </p>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
 
-              {/* Legend */}
-              <div className="mt-8 pt-6 border-t border-border space-y-3">
-                <h4 className="font-bold text-primary text-sm">Legenda</h4>
-                <div className="space-y-2 text-xs">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded bg-gradient-to-br from-primary/10 to-primary/5 border-2 border-primary"></div>
-                    <span>Com evento</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded bg-secondary border border-border"></div>
-                    <span>Sem evento</span>
-                  </div>
-                </div>
+        {/* All Events List for Current Month */}
+        {Object.keys(monthEvents).length > 0 && (
+          <div className="mt-12 max-w-6xl mx-auto">
+            <div className="bg-white rounded-lg shadow-lg p-6 md:p-8">
+              <h3 className="text-3xl font-bold text-primary mb-6">
+                Destaques de {MONTH_NAMES[currentMonth - 1]}
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {Object.entries(monthEvents)
+                  .sort(([dayA], [dayB]) => parseInt(dayA) - parseInt(dayB))
+                  .map(([day, events]) => (
+                    <div key={day} className="border-l-4 border-primary pl-4 py-2">
+                      <div className="font-bold text-primary mb-1">
+                        {day} de {MONTH_NAMES[currentMonth - 1]}
+                      </div>
+                      <div className="space-y-1">
+                        {events.map((event, idx) => (
+                          <div
+                            key={idx}
+                            className={`text-sm flex items-center gap-2 ${
+                              event.type === 'birthday'
+                                ? 'text-foreground'
+                                : event.type === 'special'
+                                ? 'text-[#ce2b37] font-semibold'
+                                : 'text-[#00924a] font-semibold'
+                            }`}
+                          >
+                            <span>{getEventTypeIcon(event.type)}</span>
+                            {event.name}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
               </div>
             </div>
           </div>
-        </div>
-
-        {/* All Events List */}
-        <div className="mt-12 max-w-6xl mx-auto">
-          <div className="bg-white rounded-lg shadow-lg p-6 md:p-8">
-            <h3 className="text-3xl font-bold text-primary mb-6">
-              Destaques do Mês
-            </h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {Object.entries(EVENTS)
-                .sort(([dayA], [dayB]) => parseInt(dayA) - parseInt(dayB))
-                .map(([day, events]) => (
-                  <div key={day} className="border-l-4 border-primary pl-4 py-2">
-                    <div className="font-bold text-primary mb-1">
-                      {day} de Março
-                    </div>
-                    <div className="space-y-1">
-                      {events.map((event, idx) => (
-                        <div
-                          key={idx}
-                          className={`text-sm ${
-                            event.includes('Dia') || event.includes('Festa') || event.includes('Dantedì')
-                              ? 'text-[#ce2b37] font-semibold'
-                              : 'text-foreground'
-                          }`}
-                        >
-                          • {event}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Footer */}
