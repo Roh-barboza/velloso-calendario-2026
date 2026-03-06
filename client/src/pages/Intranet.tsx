@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import {
   Home,
@@ -19,10 +19,26 @@ import {
 
 type Section = 'inicio' | 'arquivos' | 'crm' | 'calendario';
 
+const highlights = [
+  { id: 1, title: 'Dia da Mulher', date: '08/03/2026', type: 'Evento', color: 'from-pink-500 to-rose-600', icon: '👩' },
+  { id: 2, title: 'Dia do Consumidor', date: '15/03/2026', type: 'Evento', color: 'from-blue-500 to-cyan-600', icon: '🛍️' },
+  { id: 3, title: 'Vendas - Março', value: 'R$ 45.320', growth: '+23%', color: 'from-green-500 to-emerald-600', icon: '📈' },
+  { id: 4, title: 'Novos Clientes', value: '12', growth: '+8%', color: 'from-purple-500 to-indigo-600', icon: '👥' },
+  { id: 5, title: 'Processos Concluídos', value: '8', growth: '+15%', color: 'from-orange-500 to-amber-600', icon: '✅' },
+];
+
 export default function Intranet() {
   const [, navigate] = useLocation();
   const [activeSection, setActiveSection] = useState<Section>('inicio');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [currentHighlightIndex, setCurrentHighlightIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentHighlightIndex((prev) => (prev + 1) % highlights.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const menuItems = [
     { id: 'inicio' as Section, label: 'Início', icon: Home },
@@ -53,6 +69,47 @@ export default function Intranet() {
               <p className="text-white/70 text-sm mt-2">
                 Gerencie arquivos, acompanhe processos e mantenha sua equipe sincronizada.
               </p>
+            </div>
+
+            {/* Carousel de Destaques */}
+            <div className="relative overflow-hidden rounded-2xl bg-white border border-slate-200">
+              <div className="relative h-48 flex items-center justify-center">
+                {highlights.map((highlight, index) => (
+                  <div
+                    key={highlight.id}
+                    className={`absolute inset-0 bg-gradient-to-r ${highlight.color} transition-opacity duration-1000 flex items-center justify-center ${
+                      index === currentHighlightIndex ? 'opacity-100' : 'opacity-0'
+                    }`}
+                  >
+                    <div className="text-center text-white">
+                      <div className="text-6xl mb-2">{highlight.icon}</div>
+                      <h3 className="text-2xl font-bold mb-1">{highlight.title}</h3>
+                      {highlight.type ? (
+                        <p className="text-white/80">{highlight.date} • {highlight.type}</p>
+                      ) : (
+                        <div className="flex items-center justify-center gap-2">
+                          <p className="text-2xl font-bold">{highlight.value}</p>
+                          <span className="bg-white/20 px-2 py-1 rounded text-sm font-semibold">{highlight.growth}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* Indicadores */}
+              <div className="flex items-center justify-center gap-2 p-4 bg-slate-50">
+                {highlights.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setCurrentHighlightIndex(index)}
+                    className={`h-2 rounded-full transition-all ${
+                      index === currentHighlightIndex
+                        ? 'w-8 bg-[#592343]'
+                        : 'w-2 bg-slate-300 hover:bg-slate-400'
+                    }`}
+                  />
+                ))}
+              </div>
             </div>
 
             {/* Quick Stats */}

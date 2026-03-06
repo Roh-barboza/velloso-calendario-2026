@@ -8,6 +8,7 @@ import Home from "./pages/Home";
 import TaskGenerator from "./pages/TaskGenerator";
 import CRM from "./pages/CRM";
 import Intranet from "./pages/Intranet";
+import Login from "./pages/Login";
 
 
 function Router() {
@@ -17,6 +18,7 @@ function Router() {
       <Route path="/tarefas" component={TaskGenerator} />
       <Route path="/crm" component={CRM} />
       <Route path="/intranet" component={Intranet} />
+      <Route path="/login" component={Login} />
       <Route path="/404" component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />
