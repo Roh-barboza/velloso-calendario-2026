@@ -1,3 +1,5 @@
+import Relatorios from "./pages/Relatorios";
+import Calendario from "./pages/Calendario";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -25,6 +27,8 @@ function Router() {
         <Route path="/processos" component={Processos} />
   <Route path="/documentos" component={Documentos} />
   <Route path="/clientes" component={Clientes} />
+  <Route path="/calendario" component={Calendario} />
+  <Route path="/relatorios" component={Relatorios} />
 <Route path="/404" component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />
