@@ -1,47 +1,66 @@
-Aqui estÃ¡ um exemplo de cÃ³digo para o arquivo `Processos.tsx` com as funcionalidades solicitadas:
+Aqui estÃ¡ um exemplo de como vocÃª pode criar o componente `Processos.tsx` com as caracterÃ­sticas solicitadas:
+
 ```tsx
 import React from 'react';
-import { Link, useLocation } from 'wouter';
-import { Header } from './Header';
-import { Sidebar } from './Sidebar';
-import { Table } from './Table';
+import { useLocation } from 'wouter';
+import { FaFilter } from 'lucide-icons-react';
+import { Header, Sidebar, Table } from './components';
+import { useFilters } from './hooks';
 
 const Processos = () => {
   const [location, setLocation] = useLocation();
+  const { filters, setFilters } = useFilters();
 
-  const handleFilter = (filter: string) => {
-    setLocation(`/processos/${filter}`);
+  const handleFilterChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setFilters({ ...filters, [event.target.name]: event.target.value });
+  };
+
+  const handleFilterSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLocation(`/processos?${new URLSearchParams(filters).toString()}`);
   };
 
   return (
-    <div className="bg-gray-100 h-screen">
-      <Header />
-      <div className="flex h-screen">
-        <Sidebar />
-        <div className="flex-1 p-4">
-          <h1 className="text-3xl font-bold mb-4">Cidadania Italiana</h1>
-          <div className="flex justify-between mb-4">
-            <button
-              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-              onClick={() => handleFilter('todos')}
-            >
-              Todos
-            </button>
-            <button
-              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-              onClick={() => handleFilter('pendentes')}
-            >
-              Pendentes
-            </button>
-            <button
-              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-              onClick={() => handleFilter('aprovados')}
-            >
-              Aprovados
-            </button>
-          </div>
-          <Table />
-        </div>
+    <div className="flex h-screen">
+      <Sidebar className="bg-sidebar" />
+      <div className="flex-1 p-4">
+        <Header
+          title="Processos"
+          metrics={
+            <div className="flex items-center justify-between">
+              <span className="text-lg font-bold">Total de processos: 100</span>
+              <button
+                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+                onClick={() => setLocation('/processos/novo')}
+              >
+                Novo processo
+              </button>
+            </div>
+          }
+        />
+        <form onSubmit={handleFilterSubmit} className="flex items-center justify-between mb-4">
+          <label className="mr-2">Status:</label>
+          <select
+            name="status"
+            value={filters.status}
+            onChange={handleFilterChange}
+            className="bg-gray-200 border border-gray-400 rounded py-1 px-2"
+          >
+            <option value="">Todos</option>
+            <option value="aberto">Aberto</option>
+            <option value="fechado">Fechado</option>
+          </select>
+          <button type="submit" className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+            <FaFilter />
+          </button>
+        </form>
+        <Table
+          data={[
+            { id: 1, cliente: 'Cliente 1', status: 'Aberto' },
+            { id: 2, cliente: 'Cliente 2', status: 'Fechado' },
+            { id: 3, cliente: 'Cliente 3', status: 'Aberto' },
+          ]}
+        />
       </div>
     </div>
   );
@@ -50,89 +69,33 @@ const Processos = () => {
 export default Processos;
 ```
 
-```tsx
-// Header.tsx
-import React from 'react';
-import { Link } from 'wouter';
-
-const Header = () => {
-  return (
-    <header className="bg-gray-800 text-white p-4">
-      <nav className="flex justify-between">
-        <Link to="/" className="text-lg font-bold">
-          Velloso Hub
-        </Link>
-        <ul className="flex items-center space-x-4">
-          <li>
-            <Link to="/processos" className="text-lg font-bold">
-              Processos
-            </Link>
-          </li>
-        </ul>
-      </nav>
-    </header>
-  );
-};
-
-export default Header;
-```
+E aqui estÃ¡ um exemplo de como vocÃª pode criar o componente `Table.tsx`:
 
 ```tsx
-// Sidebar.tsx
 import React from 'react';
 
-const Sidebar = () => {
-  return (
-    <aside className="bg-gray-800 text-white p-4 w-64">
-      <nav className="flex flex-col space-y-4">
-        <Link to="/processos" className="text-lg font-bold">
-          Processos
-        </Link>
-        <Link to="/processos/todos" className="text-lg font-bold">
-          Todos
-        </Link>
-        <Link to="/processos/pendentes" className="text-lg font-bold">
-          Pendentes
-        </Link>
-        <Link to="/processos/aprovados" className="text-lg font-bold">
-          Aprovados
-        </Link>
-      </nav>
-    </aside>
-  );
-};
+interface TableProps {
+  data: any[];
+}
 
-export default Sidebar;
-```
-
-```tsx
-// Table.tsx
-import React from 'react';
-
-const Table = () => {
+const Table = ({ data }: TableProps) => {
   return (
     <table className="w-full border-collapse border border-gray-400">
       <thead>
         <tr>
-          <th className="border border-gray-400 p-4">Nome</th>
-          <th className="border border-gray-400 p-4">Sobrenome</th>
-          <th className="border border-gray-400 p-4">Data de Nascimento</th>
-          <th className="border border-gray-400 p-4">Status</th>
+          <th className="border border-gray-400 p-2">ID</th>
+          <th className="border border-gray-400 p-2">Cliente</th>
+          <th className="border border-gray-400 p-2">Status</th>
         </tr>
       </thead>
       <tbody>
-        <tr>
-          <td className="border border-gray-400 p-4">JoÃ£o</td>
-          <td className="border border-gray-400 p-4">Silva</td>
-          <td className="border border-gray-400 p-4">01/01/1990</td>
-          <td className="border border-gray-400 p-4">Aprovado</td>
-        </tr>
-        <tr>
-          <td className="border border-gray-400 p-4">Maria</td>
-          <td className="border border-gray-400 p-4">Oliveira</td>
-          <td className="border border-gray-400 p-4">02/02/1995</td>
-          <td className="border border-gray-400 p-4">Pendente</td>
-        </tr>
+        {data.map((item) => (
+          <tr key={item.id}>
+            <td className="border border-gray-400 p-2">{item.id}</td>
+            <td className="border border-gray-400 p-2">{item.cliente}</td>
+            <td className="border border-gray-400 p-2">{item.status}</td>
+          </tr>
+        ))}
       </tbody>
     </table>
   );
@@ -141,4 +104,76 @@ const Table = () => {
 export default Table;
 ```
 
-Essa Ã© uma implementaÃ§Ã£o bÃ¡sica das funcionalidades solicitadas. VocÃª pode personalizar e adicionar mais funcionalidades conforme necessÃ¡rio.
+E aqui estÃ¡ um exemplo de como vocÃª pode criar o componente `Header.tsx`:
+
+```tsx
+import React from 'react';
+
+interface HeaderProps {
+  title: string;
+  metrics?: React.ReactNode;
+}
+
+const Header = ({ title, metrics }: HeaderProps) => {
+  return (
+    <header className="bg-gray-200 p-4">
+      <h1 className="text-lg font-bold">{title}</h1>
+      {metrics && <div className="flex items-center justify-between">{metrics}</div>}
+    </header>
+  );
+};
+
+export default Header;
+```
+
+E aqui estÃ¡ um exemplo de como vocÃª pode criar o componente `Sidebar.tsx`:
+
+```tsx
+import React from 'react';
+
+const Sidebar = () => {
+  return (
+    <aside className="bg-sidebar h-screen p-4">
+      <ul>
+        <li className="mb-2">
+          <a href="#" className="text-lg font-bold">
+            Processos
+          </a>
+        </li>
+        <li className="mb-2">
+          <a href="#" className="text-lg font-bold">
+            Clientes
+          </a>
+        </li>
+        <li className="mb-2">
+          <a href="#" className="text-lg font-bold">
+            RelatÃ³rios
+          </a>
+        </li>
+      </ul>
+    </aside>
+  );
+};
+
+export default Sidebar;
+```
+
+E aqui estÃ¡ um exemplo de como vocÃª pode criar o hook `useFilters.ts`:
+
+```tsx
+import { useState } from 'react';
+
+interface Filters {
+  status: string;
+}
+
+const useFilters = () => {
+  const [filters, setFilters] = useState<Filters>({ status: '' });
+
+  return { filters, setFilters };
+};
+
+export default useFilters;
+```
+
+Lembre-se de que esses sÃ£o apenas exemplos e vocÃª pode personalizar e melhorar os componentes e o hook para atender Ã s suas necessidades especÃ­ficas. AlÃ©m disso, Ã© importante lembrar que o cÃ³digo acima Ã© apenas uma demonstraÃ§Ã£o funcional e nÃ£o inclui validaÃ§Ã£o de dados ou outras funcionalidades que vocÃª pode precisar implementar em um projeto real.
