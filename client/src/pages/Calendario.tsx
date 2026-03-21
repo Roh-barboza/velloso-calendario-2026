@@ -1,213 +1,128 @@
+Aqui estÃ¡ um exemplo de cÃ³digo para o componente `Calendario.tsx` com as funcionalidades solicitadas:
 ```tsx
 import React from 'react';
-import { Link } from 'wouter';
-import { CalendarIcon, ClockIcon, MapPinIcon } from '@heroicons/react/solid';
-import { Calendar } from 'react-calendar';
-import 'react-calendar/dist/Calendar.css';
-import { useState } from 'react';
-import { Modal } from 'react-modal';
 import { useLocation } from 'wouter';
+import { FaCalendarAlt } from 'react-icons/fa';
+import { HiOutlineMenuAlt1 } from 'react-icons/hi';
+import { BsFillGridFill } from 'react-icons/bs';
+import { AiOutlineFilter } from 'react-icons/ai';
 
 const Calendario = () => {
-  const [date, setDate] = useState(new Date());
-  const [isOpen, setIsOpen] = useState(false);
-  const [event, setEvent] = useState('');
-  const [location, setLocation] = useState('');
-  const [description, setDescription] = useState('');
-  const [feriado, setFeriado] = useState(false);
-  const [feriados, setFeriados] = useState([
-    { date: '2026-03-08', name: 'Mulher' },
-    { date: '2026-03-15', name: 'Consumidor' },
-  ]);
+  const [location, setLocation] = useLocation();
 
-  const handleDateChange = (newDate: Date) => {
-    setDate(newDate);
+  const handleFilterChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    setLocation(`/processos?status=${event.target.value}`);
   };
-
-  const handleOpenModal = () => {
-    setIsOpen(true);
-  };
-
-  const handleCloseModal = () => {
-    setIsOpen(false);
-  };
-
-  const handleAddEvent = () => {
-    setFeriados([...feriados, { date: date.toISOString().split('T')[0], name: event }]);
-    setIsOpen(false);
-  };
-
-  const locationUrl = useLocation();
 
   return (
     <div className="h-screen w-screen bg-gray-100">
-      <div className="flex h-screen">
-        <div className="w-64 bg-[#592343] p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-lg text-white">Velloso Hub</h1>
-            <button className="bg-white text-[#592343] py-2 px-4 rounded">
-              <Link to="/perfil">Perfil</Link>
+      <header className="bg-white shadow-md p-4">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center">
+            <button
+              className="text-gray-600 hover:text-gray-900"
+              onClick={() => setLocation('/')}
+            >
+              <HiOutlineMenuAlt1 size={24} />
+            </button>
+            <h1 className="text-lg font-bold">Velloso Hub</h1>
+          </div>
+          <div className="flex items-center">
+            <button
+              className="text-gray-600 hover:text-gray-900"
+              onClick={() => setLocation('/processos')}
+            >
+              <FaCalendarAlt size={24} />
+            </button>
+            <button
+              className="text-gray-600 hover:text-gray-900"
+              onClick={() => setLocation('/processos')}
+            >
+              <BsFillGridFill size={24} />
+            </button>
+            <button
+              className="text-gray-600 hover:text-gray-900"
+              onClick={() => setLocation('/processos')}
+            >
+              <AiOutlineFilter size={24} />
             </button>
           </div>
-          <ul className="space-y-4">
-            <li className="flex items-center">
-              <CalendarIcon className="w-6 h-6 text-white" />
-              <Link to="/calendario">CalendÃ¡rio</Link>
-            </li>
-            <li className="flex items-center">
-              <ClockIcon className="w-6 h-6 text-white" />
-              <Link to="/eventos">Eventos</Link>
-            </li>
-            <li className="flex items-center">
-              <MapPinIcon className="w-6 h-6 text-white" />
-              <Link to="/localizacao">LocalizaÃ§Ã£o</Link>
-            </li>
-          </ul>
         </div>
-        <div className="flex-1 p-4">
-          <div className="flex justify-between mb-4">
-            <h1 className="text-2xl">CalendÃ¡rio</h1>
-            <button className="bg-white text-[#592343] py-2 px-4 rounded" onClick={handleOpenModal}>
-              Adicionar Evento
-            </button>
-          </div>
-          <div className="grid grid-cols-7 gap-4">
-            {feriados.map((feriado, index) => (
-              <div key={index} className="bg-white p-4 rounded">
-                <h2 className="text-lg">{feriado.name}</h2>
-                <p className="text-sm">{feriado.date}</p>
-              </div>
-            ))}
-          </div>
-          <Modal
-            isOpen={isOpen}
-            onRequestClose={handleCloseModal}
-            className="fixed top-0 left-0 w-full h-screen bg-gray-900/50 p-4"
-          >
-            <div className="bg-white p-4 rounded">
-              <h2 className="text-lg">Adicionar Evento</h2>
-              <form className="space-y-4">
-                <div className="flex items-center">
-                  <CalendarIcon className="w-6 h-6 text-gray-400" />
-                  <input
-                    type="date"
-                    value={date.toISOString().split('T')[0]}
-                    onChange={(e) => setDate(new Date(e.target.value))}
-                    className="w-full py-2 px-4 rounded"
-                  />
-                </div>
-                <div className="flex items-center">
-                  <ClockIcon className="w-6 h-6 text-gray-400" />
-                  <input
-                    type="text"
-                    value={event}
-                    onChange={(e) => setEvent(e.target.value)}
-                    className="w-full py-2 px-4 rounded"
-                    placeholder="Nome do Evento"
-                  />
-                </div>
-                <div className="flex items-center">
-                  <MapPinIcon className="w-6 h-6 text-gray-400" />
-                  <input
-                    type="text"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    className="w-full py-2 px-4 rounded"
-                    placeholder="LocalizaÃ§Ã£o"
-                  />
-                </div>
-                <div className="flex items-center">
-                  <p className="text-sm">Feriado?</p>
-                  <input
-                    type="checkbox"
-                    checked={feriado}
-                    onChange={() => setFeriado(!feriado)}
-                    className="w-4 h-4"
-                  />
-                </div>
-                <button
-                  type="button"
-                  className="bg-white text-[#592343] py-2 px-4 rounded"
-                  onClick={handleAddEvent}
-                >
-                  Adicionar
-                </button>
-              </form>
+      </header>
+      <main className="p-4">
+        <div className="bg-white shadow-md p-4">
+          <h2 className="text-lg font-bold">Processos</h2>
+          <div className="flex justify-between items-center">
+            <div className="flex items-center">
+              <label className="text-gray-600">Status:</label>
+              <select
+                className="bg-gray-100 border border-gray-300 text-gray-600 py-1 px-2"
+                onChange={handleFilterChange}
+              >
+                <option value="">Todos</option>
+                <option value="pendente">Pendente</option>
+                <option value="em-andamento">Em andamento</option>
+                <option value="concluido">ConcluÃ­do</option>
+              </select>
             </div>
-          </Modal>
+            <button
+              className="bg-blue-500 hover:bg-blue-700 text-white py-1 px-2 rounded"
+              onClick={() => setLocation('/processos/novo')}
+            >
+              Novo Processo
+            </button>
+          </div>
+          <table className="w-full mt-4">
+            <thead>
+              <tr>
+                <th className="border border-gray-300 py-2 px-4">ID</th>
+                <th className="border border-gray-300 py-2 px-4">Cliente</th>
+                <th className="border border-gray-300 py-2 px-4">Status</th>
+                <th className="border border-gray-300 py-2 px-4">AÃ§Ãµes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="border border-gray-300 py-2 px-4">1</td>
+                <td className="border border-gray-300 py-2 px-4">JoÃ£o da Silva</td>
+                <td className="border border-gray-300 py-2 px-4">Pendente</td>
+                <td className="border border-gray-300 py-2 px-4">
+                  <button
+                    className="bg-blue-500 hover:bg-blue-700 text-white py-1 px-2 rounded"
+                    onClick={() => setLocation('/processos/1')}
+                  >
+                    Ver Detalhes
+                  </button>
+                </td>
+              </tr>
+              <tr>
+                <td className="border border-gray-300 py-2 px-4">2</td>
+                <td className="border border-gray-300 py-2 px-4">Maria Oliveira</td>
+                <td className="border border-gray-300 py-2 px-4">Em andamento</td>
+                <td className="border border-gray-300 py-2 px-4">
+                  <button
+                    className="bg-blue-500 hover:bg-blue-700 text-white py-1 px-2 rounded"
+                    onClick={() => setLocation('/processos/2')}
+                  >
+                    Ver Detalhes
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-      </div>
+      </main>
     </div>
   );
 };
 
 export default Calendario;
 ```
+Esse cÃ³digo cria um componente `Calendario` que inclui:
 
-```tsx
-// Calendario.tsx
-import React from 'react';
-import { Calendar } from 'react-calendar';
-import 'react-calendar/dist/Calendar.css';
+* Um header com um menu lateral e um botÃ£o para acessar a pÃ¡gina de processos
+* Uma tabela com os processos, incluindo o ID, cliente, status e aÃ§Ãµes
+* Um filtro de status para a tabela
+* Um botÃ£o para criar um novo processo
 
-const Calendario = () => {
-  const [date, setDate] = React.useState(new Date());
-
-  const handleDateChange = (newDate: Date) => {
-    setDate(newDate);
-  };
-
-  return (
-    <div>
-      <Calendar onChange={handleDateChange} value={date} />
-    </div>
-  );
-};
-
-export default Calendario;
-```
-
-```tsx
-// Eventos.tsx
-import React from 'react';
-
-const Eventos = () => {
-  return (
-    <div>
-      <h1>Eventos</h1>
-    </div>
-  );
-};
-
-export default Eventos;
-```
-
-```tsx
-// Localizacao.tsx
-import React from 'react';
-
-const Localizacao = () => {
-  return (
-    <div>
-      <h1>LocalizaÃ§Ã£o</h1>
-    </div>
-  );
-};
-
-export default Localizacao;
-```
-
-```tsx
-// Perfil.tsx
-import React from 'react';
-
-const Perfil = () => {
-  return (
-    <div>
-      <h1>Perfil</h1>
-    </div>
-  );
-};
-
-export default Perfil;
-```
+Lembre-se de que esse Ã© apenas um exemplo e vocÃª pode personalizar o cÃ³digo para atender Ã s suas necessidades especÃ­ficas. AlÃ©m disso, Ã© importante lembrar que esse cÃ³digo nÃ£o inclui a implementaÃ§Ã£o de qualquer lÃ³gica de negÃ³cios ou banco de dados, apenas a estrutura do componente.
