@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, ListTodo, Users, LayoutDashboard } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ListTodo, Users, LayoutDashboard, Calendar, TrendingUp, FileText } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { EVENTS_BY_MONTH, MONTH_NAMES, type EventType } from '@/lib/events';
 
@@ -128,24 +128,38 @@ export default function Home() {
           </p>
           
           {/* Navigation Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center flex-wrap">
+          <div className="flex flex-col sm:flex-row gap-3 justify-center flex-wrap">
             <button
-              onClick={() => navigate('/tarefas')}
-              className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-semibold"
+              onClick={() => navigate('/calendario')}
+              className="flex items-center justify-center gap-2 px-5 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-semibold"
             >
-              <ListTodo className="w-5 h-5" />
-              Gerador de Tarefas
+              <Calendar className="w-5 h-5" />
+              Calendário
             </button>
             <button
-              onClick={() => navigate('/crm')}
-              className="flex items-center justify-center gap-2 px-6 py-3 bg-white text-primary border-2 border-primary rounded-lg hover:bg-primary/5 transition-colors font-semibold"
+              onClick={() => navigate('/clientes')}
+              className="flex items-center justify-center gap-2 px-5 py-3 bg-white text-primary border-2 border-primary rounded-lg hover:bg-primary/5 transition-colors font-semibold"
             >
               <Users className="w-5 h-5" />
-              Processos / CRM
+              Clientes
+            </button>
+            <button
+              onClick={() => navigate('/vendas')}
+              className="flex items-center justify-center gap-2 px-5 py-3 bg-[#C9A84C] text-white rounded-lg hover:bg-[#b0923e] transition-colors font-semibold"
+            >
+              <TrendingUp className="w-5 h-5" />
+              Vendas
+            </button>
+            <button
+              onClick={() => navigate('/processos')}
+              className="flex items-center justify-center gap-2 px-5 py-3 bg-white text-primary border-2 border-primary rounded-lg hover:bg-primary/5 transition-colors font-semibold"
+            >
+              <FileText className="w-5 h-5" />
+              Processos
             </button>
             <button
               onClick={() => navigate('/intranet')}
-              className="flex items-center justify-center gap-2 px-6 py-3 bg-[#ce2b37] text-white rounded-lg hover:bg-[#b02030] transition-colors font-semibold"
+              className="flex items-center justify-center gap-2 px-5 py-3 bg-[#ce2b37] text-white rounded-lg hover:bg-[#b02030] transition-colors font-semibold"
             >
               <LayoutDashboard className="w-5 h-5" />
               Intranet

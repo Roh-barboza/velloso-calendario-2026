@@ -1,5 +1,6 @@
 import Relatorios from "./pages/Relatorios";
 import Calendario from "./pages/Calendario";
+import Vendas from "./pages/Vendas";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
@@ -15,22 +16,21 @@ import Clientes from "./pages/Clientes";
 import Documentos from "./pages/Documentos";
 import Processos from "./pages/Processos";
 
-
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/calendario" component={Calendario} />
+      <Route path="/clientes" component={Clientes} />
+      <Route path="/processos" component={Processos} />
+      <Route path="/vendas" component={Vendas} />
+      <Route path="/relatorios" component={Relatorios} />
+      <Route path="/documentos" component={Documentos} />
+      <Route path="/intranet" component={Intranet} />
       <Route path="/tarefas" component={TaskGenerator} />
       <Route path="/crm" component={CRM} />
-      <Route path="/intranet" component={Intranet} />
       <Route path="/login" component={Login} />
-        <Route path="/processos" component={Processos} />
-  <Route path="/documentos" component={Documentos} />
-  <Route path="/clientes" component={Clientes} />
-  <Route path="/calendario" component={Calendario} />
-  <Route path="/relatorios" component={Relatorios} />
-<Route path="/404" component={NotFound} />
-      {/* Final fallback route */}
+      <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
   );
