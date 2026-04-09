@@ -12,18 +12,13 @@ export interface SheetData {
   error: string | null;
 }
 
-// ─── URLs CSV Públicas (publicadas via Arquivo → Publicar na Web → CSV) ───────
-export const SHEET_URLS = {
-  /** Planilha 1 – Vendas */
-  vendas:
-    'https://docs.google.com/spreadsheets/d/e/2PACX-1vSLRDqgcYE4QpXZ3WeGzr5nDeeEVvIDPOVmTdshA0lZEGZA9m3PZSVRBZh30_sROKFJFd4Ll3l-Ar_v/pub?output=csv',
-  /** Planilha 2 – Clientes / Processos */
-  clientes:
-    'https://docs.google.com/spreadsheets/d/e/2PACX-1vSDxyW-yoO1Y9YngZEL5L4uAKx8Vd9A18Y7oF7OdqvjIUJBGdnuakVX6FJz63m1kb2TnkpFyuGNAuVz/pub?output=csv',
-  /** Planilha 3 – Calendário */
-  calendario:
-    'https://docs.google.com/spreadsheets/d/e/2PACX-1vRkhaBtnf2pTwGdZh8VroPSlvAjgfikS2pzrswllPTBJuYQrrB8PEJXKRUvqdzl7oLsU37gMGTEd-qC/pub?output=csv',
-} as const;
+// Nomes válidos de planilhas disponíveis no proxy
+export type SheetName = 'vendas' | 'clientes' | 'calendario';
+
+// URL do proxy serverless — funciona tanto em dev (Vite proxy) quanto em produção (Vercel)
+function getProxyUrl(sheet: SheetName): string {
+  return `/api/sheets-proxy?sheet=${sheet}`;
+}
 
 // ─── CSV parser ───────────────────────────────────────────────────────────────
 
@@ -72,10 +67,10 @@ function parseCsv(text: string): { headers: string[]; rows: SheetRow[] } {
   return { headers, rows };
 }
 
-// ─── Hook: busca por URL CSV direta ──────────────────────────────────────────
+// ─── Hook principal — busca via proxy serverless ──────────────────────────────
 
-export function useGoogleSheetsCsv(
-  csvUrl: string,
+export function useSheetByName(
+  sheetName: SheetName,
   pollingInterval = 60000
 ): SheetData & { refresh: () => void } {
   const [data, setData] = useState<SheetData>({
@@ -87,13 +82,14 @@ export function useGoogleSheetsCsv(
   });
 
   const fetchData = useCallback(async () => {
-    if (!csvUrl) return;
     setData((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      // Adiciona cache-buster para garantir dados frescos
-      const url = `${csvUrl}&cachebust=${Date.now()}`;
+      const url = getProxyUrl(sheetName);
       const response = await fetch(url);
-      if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(`HTTP ${response.status} — ${body}`);
+      }
       const text = await response.text();
       const { headers, rows } = parseCsv(text);
       setData({ headers, rows, lastUpdated: new Date(), loading: false, error: null });
@@ -105,7 +101,7 @@ export function useGoogleSheetsCsv(
         error: `Não foi possível carregar os dados: ${msg}`,
       }));
     }
-  }, [csvUrl]);
+  }, [sheetName]);
 
   useEffect(() => {
     fetchData();
@@ -118,15 +114,11 @@ export function useGoogleSheetsCsv(
   return { ...data, refresh: fetchData };
 }
 
-// ─── Hook legado (mantido para compatibilidade) ───────────────────────────────
-// Mapeia spreadsheetId para a URL CSV correta
+// ─── Hook legado (compatibilidade) — mapeia para useSheetByName ───────────────
 
-const LEGACY_ID_MAP: Record<string, keyof typeof SHEET_URLS> = {
-  // Planilha de Vendas
+const LEGACY_ID_MAP: Record<string, SheetName> = {
   '18X1WBzD_3NqHT7hS0F4SXTPQxgPb8yJkBZYpRTvzWqs': 'vendas',
-  // Planilha de Clientes
   '1SDxyW-yoO1Y9YngZEL5L4uAKx8Vd9A18Y7oF7OdqvjI': 'clientes',
-  // Planilha de Calendário
   '1RkhaBtnf2pTwGdZh8VroPSlvAjgfikS2pzrswllPTBJu': 'calendario',
 };
 
@@ -136,18 +128,8 @@ export function useGoogleSheets(
   pollingInterval = 60000,
   _headersRow = 1
 ): SheetData & { refresh: () => void } {
-  const key = LEGACY_ID_MAP[spreadsheetId];
-  const csvUrl = key ? SHEET_URLS[key] : SHEET_URLS.vendas;
-  return useGoogleSheetsCsv(csvUrl, pollingInterval);
-}
-
-// ─── Hook direto por nome de planilha (recomendado) ───────────────────────────
-
-export function useSheetByName(
-  sheetName: keyof typeof SHEET_URLS,
-  pollingInterval = 60000
-): SheetData & { refresh: () => void } {
-  return useGoogleSheetsCsv(SHEET_URLS[sheetName], pollingInterval);
+  const key = LEGACY_ID_MAP[spreadsheetId] ?? 'vendas';
+  return useSheetByName(key, pollingInterval);
 }
 
 // ─── Parsed helper types ──────────────────────────────────────────────────────
