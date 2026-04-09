@@ -9,7 +9,7 @@ import Layout from '@/components/Layout';
 import { useGoogleSheets, normalizeClientes, ClienteRow } from '@/hooks/useGoogleSheets';
 import { cn } from '@/lib/utils';
 
-const SHEET_ID = '1Gkhy7jcxTb96NgrM7m2b1giu6zE7LE7GhEYxngyuALY';
+const SHEET_ID = '18X1WBzD_3NqHT7hS0F4SXTPQxgPb8yJkBZYpRTvzWqs';
 const SHEET_GID = '2009268709';
 
 // ─── Mock fallback ────────────────────────────────────────────────────────────
@@ -156,7 +156,7 @@ function ClientCard({ client }: { client: ClienteRow }) {
 export default function Clientes() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const { rows, loading, error, refresh, lastUpdated } = useGoogleSheets(SHEET_ID, SHEET_GID, 60000);
+  const { rows, loading, error, refresh, lastUpdated } = useGoogleSheets(SHEET_ID, SHEET_GID, 60000, 2);
   const rawClients = rows.length > 0 ? normalizeClientes(rows) : MOCK_CLIENTS;
 
   const allStatuses = useMemo(() => {

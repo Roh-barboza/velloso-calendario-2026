@@ -19,8 +19,8 @@ import Layout from '@/components/Layout';
 import { useGoogleSheets, normalizeVendas } from '@/hooks/useGoogleSheets';
 import { cn } from '@/lib/utils';
 
-const SHEET_ID = '1VFidJZwkNA2irqhvtp13B-kB_jOqt85cAXKVfkExJC4';
-const SHEET_GID = '0';
+const SHEET_ID = '18X1WBzD_3NqHT7hS0F4SXTPQxgPb8yJkBZYpRTvzWqs';
+const SHEET_GID = '0'; // vendas tab
 
 const CHART_COLORS = ['#592343', '#C9A84C', '#00924a', '#ce2b37', '#4a90d9', '#8b6b7d'];
 

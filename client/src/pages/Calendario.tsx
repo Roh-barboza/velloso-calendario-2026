@@ -17,14 +17,14 @@ import {
 import { nanoid } from 'nanoid';
 import { motion, AnimatePresence } from 'framer-motion';
 import Layout from '@/components/Layout';
-import { useGoogleSheets, normalizeClientes } from '@/hooks/useGoogleSheets';
+import { useGoogleSheets, normalizeCalendario } from '@/hooks/useGoogleSheets';
 import { getDailyQuote } from '@/lib/quotes';
 import { cn } from '@/lib/utils';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const SHEET_ID = '1Gkhy7jcxTb96NgrM7m2b1giu6zE7LE7GhEYxngyuALY';
-const SHEET_GID = '2009268709';
+const SHEET_ID = '18X1WBzD_3NqHT7hS0F4SXTPQxgPb8yJkBZYpRTvzWqs';
+const SHEET_GID = ''; // default first tab = calendar events (Data, Name, Tipo, País, Natureza)
 
 const MONTH_NAMES = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -414,29 +414,25 @@ export default function Calendario() {
 
   const { rows, loading: sheetsLoading, error: sheetsError, refresh } = useGoogleSheets(SHEET_ID, SHEET_GID, 60000);
 
-  // Merge Google Sheets clients into calendar as read-only tasks
+  // Merge Google Sheets calendar events into calendar as read-only tasks
   useEffect(() => {
     if (!rows.length) return;
-    const clients = normalizeClientes(rows);
-    const sheetTasks: Task[] = clients
-      .filter((c) => c.nome && c.dataInicio)
-      .map((c) => {
-        const raw = c.dataInicio || '';
-        let dateKey = toDateKey(new Date());
-        const match = raw.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
-        if (match) {
-          const [, d, m, y] = match;
-          const year = y.length === 2 ? `20${y}` : y;
-          dateKey = `${year}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-        }
+    const eventos = normalizeCalendario(rows);
+    const sheetTasks: Task[] = eventos
+      .filter((e) => e.name && e.dateKey && /^\d{4}-\d{2}-\d{2}$/.test(e.dateKey))
+      .map((e) => {
+        const tipoLower = (e.tipo || '').toLowerCase();
+        let category: TaskCategory = 'eventos';
+        if (tipoLower.includes('aniver') || tipoLower.includes('birthday')) category = 'clientes';
+        else if (tipoLower.includes('opero') || tipoLower.includes('internal')) category = 'operacional';
         return {
-          id: `sheet_${c.nome}`,
-          title: `${c.nome}${c.etapa ? ` — ${c.etapa}` : ''}`,
-          date: /^\d{4}-\d{2}-\d{2}$/.test(dateKey) ? dateKey : toDateKey(new Date()),
-          category: 'clientes' as TaskCategory,
-          completed: ['concluído','fechado','finalizado'].some((s) => c.status?.toLowerCase().includes(s)),
+          id: `sheet_${e.dateKey}_${e.name}`,
+          title: e.name!,
+          date: e.dateKey!,
+          category,
+          completed: false,
           fromSheet: true,
-          notes: c.etapa || c.observacoes || '',
+          notes: [e.tipo, e.pais, e.natureza].filter(Boolean).join(' · '),
         };
       });
     setTasks((prev) => [...prev.filter((t) => !t.fromSheet), ...sheetTasks]);

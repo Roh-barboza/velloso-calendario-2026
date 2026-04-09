@@ -5,10 +5,10 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Layout from '@/components/Layout';
-import { useGoogleSheets, normalizeClientes, ClienteRow } from '@/hooks/useGoogleSheets';
+import { useGoogleSheets, normalizeProcessos, ClienteRow } from '@/hooks/useGoogleSheets';
 import { cn } from '@/lib/utils';
 
-const SHEET_ID = '1Gkhy7jcxTb96NgrM7m2b1giu6zE7LE7GhEYxngyuALY';
+const SHEET_ID = '18X1WBzD_3NqHT7hS0F4SXTPQxgPb8yJkBZYpRTvzWqs';
 const SHEET_GID = '2009268709';
 
 type StepStatus = 'completed' | 'in_progress' | 'pending';
@@ -126,8 +126,8 @@ function ProcessCard({ client }: { client: ClienteRow }) {
 export default function Processos() {
   const [search, setSearch] = useState('');
   const [etapaFilter, setEtapaFilter] = useState('');
-  const { rows, loading, error, refresh } = useGoogleSheets(SHEET_ID, SHEET_GID, 60000);
-  const rawClients = rows.length > 0 ? normalizeClientes(rows) : MOCK_PROCESSOS;
+  const { rows, loading, error, refresh } = useGoogleSheets(SHEET_ID, SHEET_GID, 60000, 2);
+  const rawClients = rows.length > 0 ? normalizeProcessos(rows) : MOCK_PROCESSOS;
 
   const filtered = useMemo(() => rawClients.filter((c) => {
     const ms = !search || c.nome.toLowerCase().includes(search.toLowerCase()) || c.etapa?.toLowerCase().includes(search.toLowerCase());
