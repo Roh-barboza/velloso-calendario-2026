@@ -6,13 +6,10 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Layout from '@/components/Layout';
-import { useGoogleSheets, normalizeClientes, ClienteRow } from '@/hooks/useGoogleSheets';
+import { useGoogleSheetsCsv, normalizeClientes, ClienteRow, SHEET_URLS } from '@/hooks/useGoogleSheets';
 import { cn } from '@/lib/utils';
 
-const SHEET_ID = '18X1WBzD_3NqHT7hS0F4SXTPQxgPb8yJkBZYpRTvzWqs';
-const SHEET_GID = '2009268709';
-
-// ─── Mock fallback ────────────────────────────────────────────────────────────
+// ─── Mock fallback ───────────────────────────────────────────────────────────────────────────────
 
 const MOCK_CLIENTS: ClienteRow[] = [
   { nome: 'João Silva', email: 'joao@email.com', telefone: '(11) 98765-4321', status: 'Em andamento', etapa: 'Documentação', valorPago: 'R$ 3.500', dataInicio: '15/01/2026', observacoes: 'Aguardando certidão do consulado' },
@@ -23,7 +20,7 @@ const MOCK_CLIENTS: ClienteRow[] = [
   { nome: 'Fernanda Rocha', email: 'fernanda@email.com', telefone: '(41) 94321-0987', status: 'Novo', etapa: 'Consulta inicial', valorPago: 'R$ 800', dataInicio: '01/04/2026' },
 ];
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Helpers ───────────────────────────────────────────────────────────────────────────────────────────
 
 function calcDaysActive(dataInicio?: string): number {
   if (!dataInicio) return 0;
@@ -57,7 +54,7 @@ function statusStyle(status?: string): { badge: string; icon: React.ReactNode } 
   return { badge: 'bg-amber-100 text-amber-700', icon: <Clock className="w-3 h-3" /> };
 }
 
-// ─── Client Card ──────────────────────────────────────────────────────────────
+// ─── Client Card ─────────────────────────────────────────────────────────────────────────────────────
 
 function ClientCard({ client }: { client: ClienteRow }) {
   const [expanded, setExpanded] = useState(false);
@@ -71,19 +68,13 @@ function ClientCard({ client }: { client: ClienteRow }) {
       animate={{ opacity: 1, y: 0 }}
       className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden"
     >
-      <div
-        className="p-4 cursor-pointer"
-        onClick={() => setExpanded(!expanded)}
-      >
+      <div className="p-4 cursor-pointer" onClick={() => setExpanded(!expanded)}>
         <div className="flex items-start gap-3">
-          {/* Avatar */}
           <div className="w-10 h-10 rounded-full bg-[#592343]/10 flex items-center justify-center shrink-0">
             <span className="text-[#592343] font-bold text-sm">
               {client.nome.split(' ').map((n) => n[0]).slice(0, 2).join('')}
             </span>
           </div>
-
-          {/* Info */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="font-semibold text-gray-900 text-sm truncate">{client.nome}</h3>
@@ -103,14 +94,11 @@ function ClientCard({ client }: { client: ClienteRow }) {
               )}
             </div>
           </div>
-
           <button className="p-1 text-gray-400 hover:text-gray-600 shrink-0 transition-colors">
             {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
         </div>
       </div>
-
-      {/* Expanded details */}
       <AnimatePresence>
         {expanded && (
           <motion.div
@@ -151,12 +139,12 @@ function ClientCard({ client }: { client: ClienteRow }) {
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Main Page ────────────────────────────────────────────────────────────────────────────────────
 
 export default function Clientes() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const { rows, loading, error, refresh, lastUpdated } = useGoogleSheets(SHEET_ID, SHEET_GID, 60000, 2);
+  const { rows, loading, error, refresh, lastUpdated } = useGoogleSheetsCsv(SHEET_URLS.clientes, 60000);
   const rawClients = rows.length > 0 ? normalizeClientes(rows) : MOCK_CLIENTS;
 
   const allStatuses = useMemo(() => {
@@ -173,49 +161,55 @@ export default function Clientes() {
     });
   }, [rawClients, search, statusFilter]);
 
-  // KPIs
   const total = rawClients.length;
-  const ativos = rawClients.filter((c) => !['concluído','fechado','finalizado'].some((s) => c.status?.toLowerCase().includes(s))).length;
+  const ativos = rawClients.filter((c) =>
+    !['concluído', 'fechado', 'finalizado'].some((s) => c.status?.toLowerCase().includes(s))
+  ).length;
   const concluidos = total - ativos;
-  const avgDays = rawClients.length > 0
-    ? Math.floor(rawClients.reduce((acc, c) => acc + calcDaysActive(c.dataInicio), 0) / rawClients.length)
-    : 0;
+  const avgDays =
+    rawClients.length > 0
+      ? Math.floor(rawClients.reduce((acc, c) => acc + calcDaysActive(c.dataInicio), 0) / rawClients.length)
+      : 0;
 
   return (
     <Layout title="Clientes">
       <div className="p-6 space-y-5">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold text-[#2D1B29]">Gestão de Clientes</h2>
             <p className="text-sm text-gray-500 mt-0.5">
               {rows.length > 0 ? `${rows.length} registros da planilha` : 'Exibindo dados de exemplo'} •{' '}
-              {lastUpdated ? `Atualizado às ${lastUpdated.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : 'Offline'}
+              {lastUpdated
+                ? `Atualizado às ${lastUpdated.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+                : loading ? 'Carregando…' : 'Offline'}
             </p>
           </div>
-          <button onClick={refresh}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#592343] text-white rounded-lg text-xs font-semibold hover:bg-[#7a2f52] transition-colors">
+          <button
+            onClick={refresh}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#592343] text-white rounded-lg text-xs font-semibold hover:bg-[#7a2f52] transition-colors"
+          >
             {loading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
             Atualizar
           </button>
         </div>
 
-        {/* KPI strip */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             { label: 'Total', value: total, color: 'border-l-[#592343]' },
             { label: 'Ativos', value: ativos, color: 'border-l-amber-500' },
             { label: 'Concluídos', value: concluidos, color: 'border-l-emerald-500' },
-            { label: 'Média ativa', value: `${formatDuration(avgDays)}`, color: 'border-l-blue-500' },
+            { label: 'Média ativa', value: formatDuration(avgDays), color: 'border-l-blue-500' },
           ].map((k) => (
-            <div key={k.label} className={cn('bg-white rounded-xl border border-gray-100 border-l-4 p-3 shadow-sm', k.color)}>
+            <div
+              key={k.label}
+              className={cn('bg-white rounded-xl border border-gray-100 border-l-4 p-3 shadow-sm', k.color)}
+            >
               <p className="text-xs text-gray-500">{k.label}</p>
               <p className="text-lg font-bold text-gray-900 mt-0.5">{k.value}</p>
             </div>
           ))}
         </div>
 
-        {/* Filters */}
         <div className="flex items-center gap-3 flex-wrap">
           <div className="relative flex-1 max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -234,27 +228,29 @@ export default function Clientes() {
               className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#592343]/30 focus:border-[#592343] bg-white"
             >
               <option value="">Todos os status</option>
-              {allStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
+              {allStatuses.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
             </select>
           </div>
           {(search || statusFilter) && (
-            <button onClick={() => { setSearch(''); setStatusFilter(''); }}
-              className="flex items-center gap-1 text-xs text-gray-500 hover:text-red-500 transition-colors">
+            <button
+              onClick={() => { setSearch(''); setStatusFilter(''); }}
+              className="flex items-center gap-1 text-xs text-gray-500 hover:text-red-500 transition-colors"
+            >
               <X className="w-3.5 h-3.5" /> Limpar filtros
             </button>
           )}
           <span className="text-xs text-gray-400 ml-auto">{filtered.length} resultado{filtered.length !== 1 ? 's' : ''}</span>
         </div>
 
-        {/* Error notice */}
         {error && (
           <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
             <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>Planilha offline — exibindo dados de exemplo. Publique a planilha para dados reais.</span>
+            <span>Planilha offline — exibindo dados de exemplo.</span>
           </div>
         )}
 
-        {/* Client list */}
         {loading && !rows.length ? (
           <div className="flex items-center justify-center py-16 text-gray-400">
             <RefreshCw className="w-5 h-5 animate-spin mr-2" /> Carregando…
@@ -266,7 +262,9 @@ export default function Clientes() {
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {filtered.map((c, i) => <ClientCard key={`${c.nome}-${i}`} client={c} />)}
+            {filtered.map((c, i) => (
+              <ClientCard key={`${c.nome}-${i}`} client={c} />
+            ))}
           </div>
         )}
       </div>
