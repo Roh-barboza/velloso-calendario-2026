@@ -119,10 +119,15 @@ export function useGoogleSheetsCsv(
 }
 
 // ─── Hook legado (mantido para compatibilidade) ───────────────────────────────
-// Agora redireciona para o hook CSV baseado no spreadsheetId
+// Mapeia spreadsheetId para a URL CSV correta
 
 const LEGACY_ID_MAP: Record<string, keyof typeof SHEET_URLS> = {
+  // Planilha de Vendas
   '18X1WBzD_3NqHT7hS0F4SXTPQxgPb8yJkBZYpRTvzWqs': 'vendas',
+  // Planilha de Clientes
+  '1SDxyW-yoO1Y9YngZEL5L4uAKx8Vd9A18Y7oF7OdqvjI': 'clientes',
+  // Planilha de Calendário
+  '1RkhaBtnf2pTwGdZh8VroPSlvAjgfikS2pzrswllPTBJu': 'calendario',
 };
 
 export function useGoogleSheets(
@@ -134,6 +139,15 @@ export function useGoogleSheets(
   const key = LEGACY_ID_MAP[spreadsheetId];
   const csvUrl = key ? SHEET_URLS[key] : SHEET_URLS.vendas;
   return useGoogleSheetsCsv(csvUrl, pollingInterval);
+}
+
+// ─── Hook direto por nome de planilha (recomendado) ───────────────────────────
+
+export function useSheetByName(
+  sheetName: keyof typeof SHEET_URLS,
+  pollingInterval = 60000
+): SheetData & { refresh: () => void } {
+  return useGoogleSheetsCsv(SHEET_URLS[sheetName], pollingInterval);
 }
 
 // ─── Parsed helper types ──────────────────────────────────────────────────────
@@ -326,16 +340,29 @@ export function normalizeCalendario(rows: SheetRow[]): CalendarioRow[] {
     .map((r) => {
       const dataStr = pick(r, ['Data', 'data', 'DATE', 'Date']);
       let dateKey = '';
-      const m = dataStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-      if (m) {
-        dateKey = `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+
+      // Formato DD/MM/YYYY ou DD-MM-YYYY
+      const m1 = dataStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+      // Formato YYYY-MM-DD (ISO)
+      const m2 = dataStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      // Formato DD/MM/YY
+      const m3 = dataStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2})$/);
+
+      if (m1) {
+        dateKey = `${m1[3]}-${m1[2].padStart(2, '0')}-${m1[1].padStart(2, '0')}`;
+      } else if (m2) {
+        dateKey = dataStr;
+      } else if (m3) {
+        const year = parseInt(m3[3]) + 2000;
+        dateKey = `${year}-${m3[2].padStart(2, '0')}-${m3[1].padStart(2, '0')}`;
       }
+
       return {
         data: dataStr,
-        name: pick(r, ['Name', 'name', 'Nome', 'Evento', 'evento']),
-        tipo: pick(r, ['Tipo', 'tipo', 'Type', 'Categoria']),
-        pais: pick(r, ['País', 'Pais', 'pais', 'Country']),
-        natureza: pick(r, ['Natureza', 'natureza', 'Nature']),
+        name: pick(r, ['Name', 'name', 'Nome', 'Evento', 'evento', 'Título', 'titulo']),
+        tipo: pick(r, ['Tipo', 'tipo', 'Type', 'Categoria', 'categoria']),
+        pais: pick(r, ['País', 'Pais', 'pais', 'Country', 'country']),
+        natureza: pick(r, ['Natureza', 'natureza', 'Nature', 'nature']),
         dateKey,
         ...r,
       };
