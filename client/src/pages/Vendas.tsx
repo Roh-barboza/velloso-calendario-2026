@@ -16,15 +16,12 @@ import {
 } from 'recharts';
 import { motion } from 'framer-motion';
 import Layout from '@/components/Layout';
-import { useGoogleSheets, normalizeVendas } from '@/hooks/useGoogleSheets';
+import { useGoogleSheetsCsv, normalizeVendas, SHEET_URLS } from '@/hooks/useGoogleSheets';
 import { cn } from '@/lib/utils';
-
-const SHEET_ID = '18X1WBzD_3NqHT7hS0F4SXTPQxgPb8yJkBZYpRTvzWqs';
-const SHEET_GID = '0'; // vendas tab
 
 const CHART_COLORS = ['#592343', '#C9A84C', '#00924a', '#ce2b37', '#4a90d9', '#8b6b7d'];
 
-// ─── Mock fallback data ────────────────────────────────────────────────────────
+// ─── Mock fallback data ───────────────────────────────────────────────────────────────────────────────────
 
 const MOCK_MONTHLY = [
   { mes: 'Jan', vendas: 32000, leads: 48, conversoes: 12 },
@@ -37,7 +34,7 @@ const MOCK_MONTHLY = [
 
 const MOCK_DAILY = Array.from({ length: 30 }, (_, i) => ({
   dia: i + 1,
-  valor: Math.floor(800 + Math.random() * 2200),
+  valor: 800 + ((i * 137 + 500) % 2200),
 }));
 
 const MOCK_CATEGORIES = [
@@ -47,7 +44,7 @@ const MOCK_CATEGORIES = [
   { name: 'Outros', value: 6 },
 ];
 
-// ─── KPI Card ─────────────────────────────────────────────────────────────────
+// ─── KPI Card ─────────────────────────────────────────────────────────────────────────────────────────────
 
 interface KPICardProps {
   title: string;
@@ -85,7 +82,7 @@ function KPICard({ title, value, change, icon: Icon, color, delay = 0 }: KPICard
   );
 }
 
-// ─── Custom Tooltip ────────────────────────────────────────────────────────────
+// ─── Custom Tooltip ─────────────────────────────────────────────────────────────────────────────────────
 
 function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: { value: number; name: string }[]; label?: string }) {
   if (!active || !payload?.length) return null;
@@ -94,7 +91,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
       <p className="font-bold text-gray-700 mb-1">{label}</p>
       {payload.map((p) => (
         <p key={p.name} className="text-gray-600">
-          {p.name}: <span className="font-semibold">{typeof p.value === 'number' && p.name.toLowerCase().includes('valor') || p.name.toLowerCase().includes('venda')
+          {p.name}: <span className="font-semibold">{typeof p.value === 'number' && (p.name.toLowerCase().includes('valor') || p.name.toLowerCase().includes('venda'))
             ? `R$ ${p.value.toLocaleString('pt-BR')}` : p.value}</span>
         </p>
       ))}
@@ -102,14 +99,13 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Main Page ────────────────────────────────────────────────────────────────────────────────────
 
 export default function Vendas() {
   const [period, setPeriod] = useState<'daily' | 'monthly'>('monthly');
-  const { rows, loading, error, refresh, lastUpdated } = useGoogleSheets(SHEET_ID, SHEET_GID, 60000);
+  const { rows, loading, error, refresh, lastUpdated } = useGoogleSheetsCsv(SHEET_URLS.vendas, 60000);
   const vendas = useMemo(() => normalizeVendas(rows), [rows]);
 
-  // ── Compute KPIs from sheet or mock data ──
   const hasRealData = vendas.length > 0;
 
   const totalVendas = useMemo(() => {
@@ -127,7 +123,6 @@ export default function Vendas() {
     : 96;
   const taxaConversao = totalLeads > 0 ? ((totalConversoes / totalLeads) * 100).toFixed(1) : '0';
 
-  // ── Build chart data from real rows ──
   const monthlyData = useMemo(() => {
     if (!hasRealData) return MOCK_MONTHLY;
     const grouped: Record<string, { vendas: number; leads: number; conversoes: number }> = {};
@@ -177,18 +172,22 @@ export default function Vendas() {
           <div>
             <h2 className="text-xl font-bold text-[#2D1B29]">Dashboard de Vendas</h2>
             <p className="text-sm text-gray-500 mt-0.5">
-              {hasRealData ? `${vendas.length} registros • ` : 'Dados de exemplo • '}
-              {lastUpdated ? `Atualizado às ${lastUpdated.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : 'Conecte sua planilha'}
+              {hasRealData ? `${vendas.length} registros` : 'Dados de exemplo'} • 
+              {lastUpdated
+                ? `Atualizado às ${lastUpdated.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+                : loading ? 'Carregando planilha…' : 'Conectando…'}
             </p>
           </div>
           <div className="flex items-center gap-2">
             {error && (
               <span className="text-xs text-amber-600 flex items-center gap-1 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200">
-                <AlertCircle className="w-3 h-3" />Planilha offline — exibindo dados de exemplo
+                <AlertCircle className="w-3 h-3" />Planilha offline — dados de exemplo
               </span>
             )}
-            <button onClick={refresh}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#592343] text-white rounded-lg text-xs font-semibold hover:bg-[#7a2f52] transition-colors">
+            <button
+              onClick={refresh}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#592343] text-white rounded-lg text-xs font-semibold hover:bg-[#7a2f52] transition-colors"
+            >
               {loading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
               Atualizar
             </button>
@@ -205,15 +204,19 @@ export default function Vendas() {
 
         {/* Charts row */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Line chart – evolution */}
           <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-[#2D1B29] text-sm">Evolução de Vendas</h3>
               <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
                 {(['monthly', 'daily'] as const).map((p) => (
-                  <button key={p} onClick={() => setPeriod(p)}
-                    className={cn('px-2.5 py-1 text-xs rounded-md font-semibold transition-all',
-                      period === p ? 'bg-white text-[#592343] shadow-sm' : 'text-gray-500')}>
+                  <button
+                    key={p}
+                    onClick={() => setPeriod(p)}
+                    className={cn(
+                      'px-2.5 py-1 text-xs rounded-md font-semibold transition-all',
+                      period === p ? 'bg-white text-[#592343] shadow-sm' : 'text-gray-500'
+                    )}
+                  >
                     {p === 'monthly' ? 'Mensal' : 'Diário'}
                   </button>
                 ))}
@@ -241,13 +244,17 @@ export default function Vendas() {
             </ResponsiveContainer>
           </div>
 
-          {/* Pie chart */}
           <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
             <h3 className="font-bold text-[#2D1B29] text-sm mb-4">Por Categoria</h3>
             <ResponsiveContainer width="100%" height={160}>
               <PieChart>
-                <Pie data={MOCK_CATEGORIES} cx="50%" cy="50%" innerRadius={45} outerRadius={70}
-                  paddingAngle={3} dataKey="value">
+                <Pie
+                  data={MOCK_CATEGORIES}
+                  cx="50%" cy="50%"
+                  innerRadius={45} outerRadius={70}
+                  paddingAngle={3}
+                  dataKey="value"
+                >
                   {MOCK_CATEGORIES.map((_, i) => (
                     <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                   ))}
@@ -267,7 +274,7 @@ export default function Vendas() {
           </div>
         </div>
 
-        {/* Bar chart – conversions */}
+        {/* Bar chart */}
         <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
           <h3 className="font-bold text-[#2D1B29] text-sm mb-4">Leads × Conversões por Mês</h3>
           <ResponsiveContainer width="100%" height={200}>
@@ -318,22 +325,6 @@ export default function Vendas() {
             </table>
           </div>
         </div>
-
-        {/* Google Sheets connection info */}
-        {error && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-              <div>
-                <p className="font-semibold text-amber-800">Planilha não conectada</p>
-                <p className="text-amber-700 mt-0.5 text-xs">
-                  Para exibir dados reais, publique a planilha (Arquivo → Compartilhar → Publicar na Web) e recarregue.
-                  ID: <code className="bg-amber-100 px-1 rounded">{SHEET_ID}</code>
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </Layout>
   );
