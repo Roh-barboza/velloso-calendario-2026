@@ -17,14 +17,11 @@ import {
 import { nanoid } from 'nanoid';
 import { motion, AnimatePresence } from 'framer-motion';
 import Layout from '@/components/Layout';
-import { useGoogleSheets, normalizeCalendario } from '@/hooks/useGoogleSheets';
+import { useSheetByName, normalizeCalendario } from '@/hooks/useGoogleSheets';
 import { getDailyQuote } from '@/lib/quotes';
 import { cn } from '@/lib/utils';
 
-// ─── Constants ───────────────────────────────────────────────────────────────
-
-const SHEET_ID = '18X1WBzD_3NqHT7hS0F4SXTPQxgPb8yJkBZYpRTvzWqs';
-const SHEET_GID = ''; // default first tab = calendar events (Data, Name, Tipo, País, Natureza)
+// ─── Constants ───────────────────────────────────────────────────────────────────
 
 const MONTH_NAMES = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -44,7 +41,7 @@ const CATEGORY_CONFIG: Record<TaskCategory, { label: string; color: string; bg: 
   pessoal:     { label: 'Pessoal',     color: 'text-purple-700',  bg: 'bg-purple-50 border-purple-200', dot: 'bg-purple-500'  },
 };
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types ──────────────────────────────────────────────────────────────────────
 
 interface Task {
   id: string;
@@ -81,7 +78,7 @@ function startOfWeek(d: Date): Date {
   return copy;
 }
 
-// ─── Task Modal ───────────────────────────────────────────────────────────────
+// ─── Task Modal ─────────────────────────────────────────────────────────────────
 
 interface TaskModalProps {
   task: Partial<Task> | null;
@@ -192,7 +189,7 @@ function TaskModal({ task, defaultDate, onSave, onClose, onDelete }: TaskModalPr
   );
 }
 
-// ─── Task Chip ────────────────────────────────────────────────────────────────
+// ─── Task Chip ─────────────────────────────────────────────────────────────────
 
 function TaskChip({ task, onClick, onToggle }: { task: Task; onClick: () => void; onToggle: () => void }) {
   const cfg = CATEGORY_CONFIG[task.category];
@@ -209,7 +206,7 @@ function TaskChip({ task, onClick, onToggle }: { task: Task; onClick: () => void
   );
 }
 
-// ─── Month View ───────────────────────────────────────────────────────────────
+// ─── Month View ──────────────────────────────────────────────────────────────────
 
 function MonthView({ year, month, tasks, today, onDayClick, onTaskClick, onTaskToggle, onTaskDrop }:
   { year: number; month: number; tasks: Task[]; today: string; onDayClick: (k: string) => void;
@@ -301,7 +298,7 @@ function MonthView({ year, month, tasks, today, onDayClick, onTaskClick, onTaskT
   );
 }
 
-// ─── Week View ────────────────────────────────────────────────────────────────
+// ─── Week View ─────────────────────────────────────────────────────────────────
 
 function WeekView({ weekStart, tasks, today, onSlotClick, onTaskClick, onTaskToggle }:
   { weekStart: Date; tasks: Task[]; today: string; onSlotClick: (k: string, h: number) => void;
@@ -357,7 +354,7 @@ function WeekView({ weekStart, tasks, today, onSlotClick, onTaskClick, onTaskTog
   );
 }
 
-// ─── Day View ─────────────────────────────────────────────────────────────────
+// ─── Day View ───────────────────────────────────────────────────────────────────
 
 function DayView({ date, tasks, onSlotClick, onTaskClick, onTaskToggle }:
   { date: Date; tasks: Task[]; onSlotClick: (h: number) => void;
@@ -402,7 +399,7 @@ function DayView({ date, tasks, onSlotClick, onTaskClick, onTaskToggle }:
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Main Page ──────────────────────────────────────────────────────────────────
 
 export default function Calendario() {
   const today = toDateKey(new Date());
@@ -412,7 +409,8 @@ export default function Calendario() {
   const [modal, setModal] = useState<{ open: boolean; task: Partial<Task> | null; defaultDate?: string }>({ open: false, task: null });
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
-  const { rows, loading: sheetsLoading, error: sheetsError, refresh } = useGoogleSheets(SHEET_ID, SHEET_GID, 60000);
+  // Usa diretamente a planilha de calendário (sem depender de SHEET_ID legado)
+  const { rows, loading: sheetsLoading, error: sheetsError, refresh } = useSheetByName('calendario', 60000);
 
   // Merge Google Sheets calendar events into calendar as read-only tasks
   useEffect(() => {
