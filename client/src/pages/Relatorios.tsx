@@ -1,19 +1,14 @@
-```typescript
-import React from 'react';
 import { useLocation } from 'wouter';
-import { FiChevronLeft, FiChevronRight } from 'lucide-react';
-import { Header, Metrics, Table } from './components';
-import { useTheme } from 'tailwindcss/react';
+import { FiChevronLeft } from 'react-icons/fi';
 
 const Relatorios = () => {
-  const { pathname } = useLocation();
-  const theme = useTheme();
+  const [pathname] = useLocation();
 
   return (
     <div className="flex h-screen">
       <div className="bg-[#592343] w-64 h-screen p-4">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-white">Relatorios</h2>
+          <h2 className="text-lg font-bold text-white">Relatórios</h2>
           <button className="bg-white text-[#592343] rounded-full p-2">
             <FiChevronLeft size={20} />
           </button>
@@ -26,7 +21,7 @@ const Relatorios = () => {
                 pathname === '/relatorios' ? 'bg-white text-[#592343]' : ''
               }`}
             >
-              Relatorios
+              Relatórios
             </a>
           </li>
           <li className="mb-2">
@@ -42,13 +37,11 @@ const Relatorios = () => {
         </ul>
       </div>
       <div className="flex-1 p-4">
-        <Header title="Relatorios" />
-        <Metrics />
-        <Table />
+        <h1 className="text-2xl font-bold text-[#592343] mb-4">Relatórios</h1>
+        <p className="text-gray-500">Em breve...</p>
       </div>
     </div>
   );
 };
 
 export default Relatorios;
-``
