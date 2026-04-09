@@ -1,40 +1,84 @@
 /**
- * Hooks para leitura das planilhas do Google Sheets via tRPC
+ * Hooks para leitura das planilhas do Google Sheets via API REST
  */
-import { trpc } from "@/lib/trpc";
+import { useState, useEffect } from "react";
+
+export interface SheetRow {
+  [key: string]: string;
+}
+
+interface SheetResponse {
+  success: boolean;
+  data: SheetRow[];
+  message: string;
+}
+
+function useSheetQuery(endpoint: string) {
+  const [data, setData] = useState<SheetRow[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
+  const [error, setError] = useState<string | undefined>(undefined);
+  const [refetchCount, setRefetchCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    setIsError(false);
+
+    fetch(`/api/sheets/${endpoint}`)
+      .then((res) => res.json() as Promise<SheetResponse>)
+      .then((json) => {
+        if (cancelled) return;
+        if (json.success) {
+          setData(json.data);
+        } else {
+          setIsError(true);
+          setError(json.message);
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setIsError(true);
+        setError(err instanceof Error ? err.message : "Erro ao carregar dados");
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [endpoint, refetchCount]);
+
+  const refetch = () => setRefetchCount((c) => c + 1);
+
+  return { data, isLoading, isError, error, refetch };
+}
 
 /**
  * Lê a planilha de Processos
  */
 export function useProcessos() {
-  const query = trpc.sheets.getProcessos.useQuery(undefined, {
-    staleTime: 5 * 60 * 1000, // 5 minutos de cache
-    retry: 2,
-  });
-
+  const query = useSheetQuery("processos");
   return {
-    processos: query.data?.data ?? [],
+    processos: query.data,
     isLoading: query.isLoading,
     isError: query.isError,
-    error: query.data?.message,
+    error: query.error,
     refetch: query.refetch,
   };
 }
 
 /**
- * Lê a planilha de Calendário e converte para o formato usado pelo app
+ * Lê a planilha de Calendário
  */
 export function useCalendarioSheets() {
-  const query = trpc.sheets.getCalendario.useQuery(undefined, {
-    staleTime: 10 * 60 * 1000, // 10 minutos de cache
-    retry: 2,
-  });
-
+  const query = useSheetQuery("calendario");
   return {
-    rows: query.data?.data ?? [],
+    rows: query.data,
     isLoading: query.isLoading,
     isError: query.isError,
-    error: query.data?.message,
+    error: query.error,
     refetch: query.refetch,
   };
 }
@@ -43,16 +87,12 @@ export function useCalendarioSheets() {
  * Lê a planilha de Vendas do Mês
  */
 export function useVendas() {
-  const query = trpc.sheets.getVendas.useQuery(undefined, {
-    staleTime: 5 * 60 * 1000, // 5 minutos de cache
-    retry: 2,
-  });
-
+  const query = useSheetQuery("vendas");
   return {
-    vendas: query.data?.data ?? [],
+    vendas: query.data,
     isLoading: query.isLoading,
     isError: query.isError,
-    error: query.data?.message,
+    error: query.error,
     refetch: query.refetch,
   };
 }
