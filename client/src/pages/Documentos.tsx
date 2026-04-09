@@ -1,88 +1,42 @@
-```typescript
-import React from 'react';
-import { useLocation } from 'wouter';
-import { FiChevronLeft, FiChevronRight } from 'lucide-react';
-import { Header, Metrics, Table } from './components';
-import { useTheme } from 'next-themes';
-import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import React, { useState } from 'react';
+import { FileText } from 'lucide-react';
 
 const Documentos = () => {
-  const [location, setLocation] = useLocation();
-  const { theme, setTheme } = useTheme();
-  const { data: session } = useSession();
-  const [data, setData] = useState([
-    {
-      id: 1,
-      nome: 'Processo 1',
-      status: 'Em andamento',
-      data: '2022-01-01',
-    },
-    {
-      id: 2,
-      nome: 'Processo 2',
-      status: 'ConcluÃ­do',
-      data: '2022-02-01',
-    },
-    {
-      id: 3,
-      nome: 'Processo 3',
-      status: 'Em andamento',
-      data: '2022-03-01',
-    },
+  const [data] = useState([
+    { id: 1, nome: 'Documento 1', status: 'Em andamento', data: '2022-01-01' },
+    { id: 2, nome: 'Documento 2', status: 'Concluído', data: '2022-02-01' },
+    { id: 3, nome: 'Documento 3', status: 'Em andamento', data: '2022-03-01' },
   ]);
 
-  useEffect(() => {
-    if (session) {
-      console.log(session);
-    }
-  }, [session]);
-
-  const handleThemeChange = () => {
-    setTheme(theme === 'dark' ? 'light' : 'dark');
-  };
-
   return (
-    <div className="flex h-screen">
-      <div className="bg-[#592343] w-64 h-screen p-4">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-white">Velloso Hub</h2>
-          <button
-            className="bg-transparent hover:bg-gray-500 text-gray-700 hover:text-white py-2 px-4 border border-gray-500 hover:border-transparent rounded"
-            onClick={handleThemeChange}
-          >
-            {theme === 'dark' ? 'Light' : 'Dark'}
-          </button>
+    <div className="flex h-screen bg-gray-100">
+      <div className="flex-1 p-6">
+        <h1 className="text-2xl font-bold text-[#592343] mb-6">Documentos</h1>
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-[#592343] text-white">
+              <tr>
+                <th className="p-3 text-left">ID</th>
+                <th className="p-3 text-left">Nome</th>
+                <th className="p-3 text-left">Status</th>
+                <th className="p-3 text-left">Data</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((row) => (
+                <tr key={row.id} className="border-b hover:bg-gray-50">
+                  <td className="p-3">{row.id}</td>
+                  <td className="p-3">{row.nome}</td>
+                  <td className="p-3">{row.status}</td>
+                  <td className="p-3">{row.data}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        <ul>
-          <li className="mb-2">
-            <a
-              href="#"
-              className="flex items-center py-2 pl-4 hover:bg-gray-500 hover:text-white rounded"
-            >
-              <FiChevronLeft className="w-4 h-4 mr-2" />
-              Voltar
-            </a>
-          </li>
-          <li className="mb-2">
-            <a
-              href="#"
-              className="flex items-center py-2 pl-4 hover:bg-gray-500 hover:text-white rounded"
-            >
-              <FiChevronRight className="w-4 h-4 mr-2" />
-              AvanÃ§ar
-            </a>
-          </li>
-        </ul>
-      </div>
-      <div className="flex-1 p-4">
-        <Header />
-        <Metrics />
-        <Table data={data} />
       </div>
     </div>
   );
 };
 
 export default Documentos;
-``
