@@ -17,31 +17,27 @@ import {
 import { nanoid } from 'nanoid';
 import { motion, AnimatePresence } from 'framer-motion';
 import Layout from '@/components/Layout';
-import { useSheetByName, normalizeCalendario } from '@/hooks/useGoogleSheets';
+import { useSheetByName } from '@/hooks/useGoogleSheets';
 import { getDailyQuote } from '@/lib/quotes';
 import { cn } from '@/lib/utils';
 
-// ─── Constants ───────────────────────────────────────────────────────────────────
-
 const MONTH_NAMES = [
-  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+  'Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+  'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro',
 ];
-const WEEKDAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-const WEEKDAYS_FULL = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-const HOURS = Array.from({ length: 13 }, (_, i) => i + 7); // 7h–19h
+const WEEKDAYS_SHORT = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+const WEEKDAYS_FULL = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+const HOURS = Array.from({ length: 13 }, (_, i) => i + 7);
 
 type ViewMode = 'month' | 'week' | 'day';
 type TaskCategory = 'eventos' | 'clientes' | 'operacional' | 'pessoal';
 
 const CATEGORY_CONFIG: Record<TaskCategory, { label: string; color: string; bg: string; dot: string }> = {
-  eventos:     { label: 'Evento',      color: 'text-blue-700',    bg: 'bg-blue-50 border-blue-200',    dot: 'bg-blue-500'    },
+  eventos:     { label: 'Evento',      color: 'text-blue-700',    bg: 'bg-blue-50 border-blue-200',       dot: 'bg-blue-500'    },
   clientes:    { label: 'Cliente',     color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
-  operacional: { label: 'Operacional', color: 'text-amber-700',   bg: 'bg-amber-50 border-amber-200',   dot: 'bg-amber-500'   },
-  pessoal:     { label: 'Pessoal',     color: 'text-purple-700',  bg: 'bg-purple-50 border-purple-200', dot: 'bg-purple-500'  },
+  operacional: { label: 'Operacional', color: 'text-amber-700',   bg: 'bg-amber-50 border-amber-200',     dot: 'bg-amber-500'   },
+  pessoal:     { label: 'Pessoal',     color: 'text-purple-700',  bg: 'bg-purple-50 border-purple-200',   dot: 'bg-purple-500'  },
 };
-
-// ─── Types ──────────────────────────────────────────────────────────────────────
 
 interface Task {
   id: string;
@@ -54,10 +50,7 @@ interface Task {
   fromSheet?: boolean;
 }
 
-// ─── Storage helpers ──────────────────────────────────────────────────────────
-
 const STORAGE_KEY = 'velloso_tasks_v2';
-
 function loadTasks(): Task[] {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
   catch { return []; }
@@ -66,7 +59,7 @@ function saveTasks(tasks: Task[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
 }
 function toDateKey(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 function parseDate(key: string): Date {
   const [y, m, d] = key.split('-').map(Number);
@@ -78,12 +71,29 @@ function startOfWeek(d: Date): Date {
   return copy;
 }
 
-// ─── Task Modal ─────────────────────────────────────────────────────────────────
+// Converte qualquer formato de data para YYYY-MM-DD
+function parseDateToKey(raw: string): string {
+  if (!raw) return '';
+  const s = raw.trim();
+  // YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // DD/MM/YYYY ou DD-MM-YYYY
+  const m1 = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  if (m1) return `${m1[3]}-${m1[2].padStart(2,'0')}-${m1[1].padStart(2,'0')}`;
+  // DD/MM/YY
+  const m2 = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2})$/);
+  if (m2) return `${2000 + parseInt(m2[3])}-${m2[2].padStart(2,'0')}-${m2[1].padStart(2,'0')}`;
+  // MM/DD/YYYY (fallback americano)
+  const m3 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m3) return `${m3[3]}-${m3[1].padStart(2,'0')}-${m3[2].padStart(2,'0')}`;
+  return '';
+}
 
+// ─── Task Modal ───────────────────────────────────────────────────────────────
 interface TaskModalProps {
   task: Partial<Task> | null;
   defaultDate?: string;
-  onSave: (t: Omit<Task, 'id'> & { id?: string }) => void;
+  onSave: (t: Omit<Task,'id'> & { id?: string }) => void;
   onClose: () => void;
   onDelete?: (id: string) => void;
 }
@@ -114,44 +124,31 @@ function TaskModal({ task, defaultDate, onSave, onClose, onDelete }: TaskModalPr
       >
         <div className="flex items-center justify-between px-6 py-4 bg-[#2D1B29] text-white">
           <h3 className="font-semibold">{isEdit ? 'Editar Tarefa' : 'Nova Tarefa'}</h3>
-          <button onClick={onClose} className="p-1 rounded hover:bg-white/10 transition-colors">
-            <X className="w-4 h-4" />
-          </button>
+          <button onClick={onClose} className="p-1 rounded hover:bg-white/10 transition-colors"><X className="w-4 h-4" /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Título *</label>
-            <input
-              autoFocus
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
+            <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)}
               placeholder="Ex: Reunião com cliente"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#592343]/30 focus:border-[#592343]"
-              required
-            />
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#592343]/30 focus:border-[#592343]" required />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                <Calendar className="inline w-3 h-3 mr-1" />Data
-              </label>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1"><Calendar className="inline w-3 h-3 mr-1" />Data</label>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#592343]/30 focus:border-[#592343]" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                <Clock className="inline w-3 h-3 mr-1" />Horário
-              </label>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1"><Clock className="inline w-3 h-3 mr-1" />Horário</label>
               <input type="time" value={time} onChange={(e) => setTime(e.target.value)}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#592343]/30 focus:border-[#592343]" />
             </div>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-              <Tag className="inline w-3 h-3 mr-1" />Categoria
-            </label>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2"><Tag className="inline w-3 h-3 mr-1" />Categoria</label>
             <div className="grid grid-cols-2 gap-2">
-              {(Object.entries(CATEGORY_CONFIG) as [TaskCategory, (typeof CATEGORY_CONFIG)[TaskCategory]][]).map(([key, cfg]) => (
+              {(Object.entries(CATEGORY_CONFIG) as [TaskCategory, typeof CATEGORY_CONFIG[TaskCategory]][]).map(([key, cfg]) => (
                 <button key={key} type="button" onClick={() => setCategory(key)}
                   className={cn('flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all',
                     category === key ? `${cfg.bg} ${cfg.color} border-current font-semibold` : 'border-gray-200 text-gray-600 hover:bg-gray-50')}>
@@ -161,18 +158,14 @@ function TaskModal({ task, defaultDate, onSave, onClose, onDelete }: TaskModalPr
             </div>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-              <FileText className="inline w-3 h-3 mr-1" />Observações
-            </label>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1"><FileText className="inline w-3 h-3 mr-1" />Observações</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Anotações opcionais..."
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#592343]/30 focus:border-[#592343] resize-none" />
           </div>
           <div className="flex items-center gap-3 pt-2">
             {isEdit && onDelete && (
               <button type="button" onClick={() => { onDelete(task!.id!); onClose(); }}
-                className="p-2 rounded-lg text-red-500 hover:bg-red-50 transition-colors">
-                <Trash2 className="w-4 h-4" />
-              </button>
+                className="p-2 rounded-lg text-red-500 hover:bg-red-50 transition-colors"><Trash2 className="w-4 h-4" /></button>
             )}
             <div className="flex gap-2 ml-auto">
               <button type="button" onClick={onClose}
@@ -189,8 +182,7 @@ function TaskModal({ task, defaultDate, onSave, onClose, onDelete }: TaskModalPr
   );
 }
 
-// ─── Task Chip ─────────────────────────────────────────────────────────────────
-
+// ─── Task Chip ────────────────────────────────────────────────────────────────
 function TaskChip({ task, onClick, onToggle }: { task: Task; onClick: () => void; onToggle: () => void }) {
   const cfg = CATEGORY_CONFIG[task.category];
   return (
@@ -206,11 +198,11 @@ function TaskChip({ task, onClick, onToggle }: { task: Task; onClick: () => void
   );
 }
 
-// ─── Month View ──────────────────────────────────────────────────────────────────
-
+// ─── Month View ───────────────────────────────────────────────────────────────
 function MonthView({ year, month, tasks, today, onDayClick, onTaskClick, onTaskToggle, onTaskDrop }:
-  { year: number; month: number; tasks: Task[]; today: string; onDayClick: (k: string) => void;
-    onTaskClick: (t: Task) => void; onTaskToggle: (id: string) => void; onTaskDrop: (id: string, date: string) => void }) {
+  { year: number; month: number; tasks: Task[]; today: string;
+    onDayClick: (k: string) => void; onTaskClick: (t: Task) => void;
+    onTaskToggle: (id: string) => void; onTaskDrop: (id: string, date: string) => void }) {
 
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -223,16 +215,16 @@ function MonthView({ year, month, tasks, today, onDayClick, onTaskClick, onTaskT
     const d = daysInPrevMonth - i;
     const m = month === 0 ? 11 : month - 1;
     const y = month === 0 ? year - 1 : year;
-    cells.push({ dateKey: `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`, day: d, cur: false });
+    cells.push({ dateKey: `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`, day: d, cur: false });
   }
   for (let d = 1; d <= daysInMonth; d++) {
-    cells.push({ dateKey: `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`, day: d, cur: true });
+    cells.push({ dateKey: `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`, day: d, cur: true });
   }
   let nextDay = 1;
   while (cells.length % 7 !== 0) {
     const m = month === 11 ? 0 : month + 1;
     const y = month === 11 ? year + 1 : year;
-    cells.push({ dateKey: `${y}-${String(m + 1).padStart(2, '0')}-${String(nextDay).padStart(2, '0')}`, day: nextDay++, cur: false });
+    cells.push({ dateKey: `${y}-${String(m+1).padStart(2,'0')}-${String(nextDay).padStart(2,'0')}`, day: nextDay++, cur: false });
   }
 
   const tasksByDate: Record<string, Task[]> = {};
@@ -298,10 +290,10 @@ function MonthView({ year, month, tasks, today, onDayClick, onTaskClick, onTaskT
   );
 }
 
-// ─── Week View ─────────────────────────────────────────────────────────────────
-
+// ─── Week View ────────────────────────────────────────────────────────────────
 function WeekView({ weekStart, tasks, today, onSlotClick, onTaskClick, onTaskToggle }:
-  { weekStart: Date; tasks: Task[]; today: string; onSlotClick: (k: string, h: number) => void;
+  { weekStart: Date; tasks: Task[]; today: string;
+    onSlotClick: (k: string, h: number) => void;
     onTaskClick: (t: Task) => void; onTaskToggle: (id: string) => void }) {
 
   const days = Array.from({ length: 7 }, (_, i) => {
@@ -330,7 +322,7 @@ function WeekView({ weekStart, tasks, today, onSlotClick, onTaskClick, onTaskTog
           {days.map((d) => {
             const key = toDateKey(d);
             const isToday = key === today;
-            const slotTasks = tasks.filter((t) => t.date === key && t.time?.startsWith(String(hour).padStart(2, '0')));
+            const slotTasks = tasks.filter((t) => t.date === key && t.time?.startsWith(String(hour).padStart(2,'0')));
             return (
               <div key={key}
                 className={cn('border-l border-t border-gray-100 min-h-[52px] p-0.5 cursor-pointer hover:bg-gray-50 transition-colors', isToday && 'bg-[#592343]/5')}
@@ -354,10 +346,10 @@ function WeekView({ weekStart, tasks, today, onSlotClick, onTaskClick, onTaskTog
   );
 }
 
-// ─── Day View ───────────────────────────────────────────────────────────────────
-
+// ─── Day View ─────────────────────────────────────────────────────────────────
 function DayView({ date, tasks, onSlotClick, onTaskClick, onTaskToggle }:
-  { date: Date; tasks: Task[]; onSlotClick: (h: number) => void;
+  { date: Date; tasks: Task[];
+    onSlotClick: (h: number) => void;
     onTaskClick: (t: Task) => void; onTaskToggle: (id: string) => void }) {
 
   const quote = getDailyQuote(date.getMonth() + 1, date.getDate());
@@ -381,11 +373,11 @@ function DayView({ date, tasks, onSlotClick, onTaskClick, onTaskToggle }:
       )}
       <div className="mx-4">
         {HOURS.map((hour) => {
-          const slotTasks = tasks.filter((t) => t.time?.startsWith(String(hour).padStart(2, '0')));
+          const slotTasks = tasks.filter((t) => t.time?.startsWith(String(hour).padStart(2,'0')));
           return (
             <div key={hour} className="flex gap-3 border-t border-gray-100 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors rounded px-2"
               onClick={() => onSlotClick(hour)}>
-              <span className="text-xs text-gray-400 w-10 shrink-0 pt-0.5 font-medium">{String(hour).padStart(2, '0')}:00</span>
+              <span className="text-xs text-gray-400 w-10 shrink-0 pt-0.5 font-medium">{String(hour).padStart(2,'0')}:00</span>
               <div className="flex flex-wrap gap-1.5 flex-1 min-w-0">
                 {slotTasks.map((t) => (
                   <TaskChip key={t.id} task={t} onClick={() => onTaskClick(t)} onToggle={() => onTaskToggle(t.id)} />
@@ -399,41 +391,68 @@ function DayView({ date, tasks, onSlotClick, onTaskClick, onTaskToggle }:
   );
 }
 
-// ─── Main Page ──────────────────────────────────────────────────────────────────
-
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Calendario() {
-  const today = toDateKey(new Date());
+  // Sempre inicia no mês/dia REAL de hoje
+  const todayReal = new Date();
+  const today = toDateKey(todayReal);
+
   const [view, setView] = useState<ViewMode>('month');
-  const [currentDate, setCurrentDate] = useState(() => new Date(2026, new Date().getMonth(), new Date().getDate()));
+  // currentDate começa SEMPRE no dia de hoje (mês atual real)
+  const [currentDate, setCurrentDate] = useState<Date>(() => new Date(todayReal));
   const [tasks, setTasks] = useState<Task[]>(loadTasks);
   const [modal, setModal] = useState<{ open: boolean; task: Partial<Task> | null; defaultDate?: string }>({ open: false, task: null });
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
-  // Usa diretamente a planilha de calendário (sem depender de SHEET_ID legado)
   const { rows, loading: sheetsLoading, error: sheetsError, refresh } = useSheetByName('calendario', 60000);
 
-  // Merge Google Sheets calendar events into calendar as read-only tasks
+  // Converte linhas da planilha em tasks do calendário
   useEffect(() => {
     if (!rows.length) return;
-    const eventos = normalizeCalendario(rows);
-    const sheetTasks: Task[] = eventos
-      .filter((e) => e.name && e.dateKey && /^\d{4}-\d{2}-\d{2}$/.test(e.dateKey))
-      .map((e) => {
-        const tipoLower = (e.tipo || '').toLowerCase();
-        let category: TaskCategory = 'eventos';
-        if (tipoLower.includes('aniver') || tipoLower.includes('birthday')) category = 'clientes';
-        else if (tipoLower.includes('opero') || tipoLower.includes('internal')) category = 'operacional';
-        return {
-          id: `sheet_${e.dateKey}_${e.name}`,
-          title: e.name!,
-          date: e.dateKey!,
-          category,
-          completed: false,
-          fromSheet: true,
-          notes: [e.tipo, e.pais, e.natureza].filter(Boolean).join(' · '),
-        };
+
+    const sheetTasks: Task[] = [];
+
+    for (const row of rows) {
+      // Pega o valor de data de qualquer coluna possível
+      const dataRaw =
+        row['Data'] ?? row['data'] ?? row['DATE'] ?? row['Date'] ?? row['date'] ??
+        row['DATA'] ?? Object.values(row).find((v) => /\d[\/-]\d/.test(v ?? '')) ?? '';
+
+      // Pega o nome/título do evento
+      const nameRaw =
+        row['Name'] ?? row['name'] ?? row['Nome'] ?? row['Evento'] ??
+        row['evento'] ?? row['Título'] ?? row['titulo'] ?? row['NOME'] ?? '';
+
+      // Ignora linhas de cabeçalho ou vazias
+      if (!dataRaw || !nameRaw) continue;
+      if (/^(data|date|nome|name|evento)$/i.test(dataRaw.trim())) continue;
+
+      const dateKey = parseDateToKey(dataRaw);
+      if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) continue;
+
+      const tipo = row['Tipo'] ?? row['tipo'] ?? row['Type'] ?? row['Categoria'] ?? '';
+      const tipoLower = tipo.toLowerCase();
+      let category: TaskCategory = 'eventos';
+      if (tipoLower.includes('aniver') || tipoLower.includes('birthday')) category = 'clientes';
+      else if (tipoLower.includes('opero') || tipoLower.includes('internal')) category = 'operacional';
+
+      const notes = [tipo, row['País'] ?? row['Pais'] ?? '', row['Natureza'] ?? row['natureza'] ?? '']
+        .filter(Boolean).join(' · ');
+
+      sheetTasks.push({
+        id: `sheet_${dateKey}_${nameRaw}`,
+        title: nameRaw,
+        date: dateKey,
+        category,
+        completed: false,
+        fromSheet: true,
+        notes: notes || undefined,
       });
-    setTasks((prev) => [...prev.filter((t) => !t.fromSheet), ...sheetTasks]);
+    }
+
+    if (sheetTasks.length > 0) {
+      setTasks((prev) => [...prev.filter((t) => !t.fromSheet), ...sheetTasks]);
+    }
   }, [rows]);
 
   useEffect(() => { saveTasks(tasks.filter((t) => !t.fromSheet)); }, [tasks]);
@@ -448,22 +467,26 @@ export default function Calendario() {
     });
   }
 
+  function goToToday() {
+    setCurrentDate(new Date());
+  }
+
   function headerLabel() {
     if (view === 'month') return `${MONTH_NAMES[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
     if (view === 'week') {
       const ws = startOfWeek(currentDate);
       const we = new Date(ws); we.setDate(ws.getDate() + 6);
-      return `${ws.getDate()} ${MONTH_NAMES[ws.getMonth()].slice(0, 3)} – ${we.getDate()} ${MONTH_NAMES[we.getMonth()].slice(0, 3)} ${we.getFullYear()}`;
+      return `${ws.getDate()} ${MONTH_NAMES[ws.getMonth()].slice(0,3)} – ${we.getDate()} ${MONTH_NAMES[we.getMonth()].slice(0,3)} ${we.getFullYear()}`;
     }
     return `${WEEKDAYS_FULL[currentDate.getDay()]}, ${currentDate.getDate()} de ${MONTH_NAMES[currentDate.getMonth()]}`;
   }
 
   function openNew(dateKey?: string, hour?: number) {
-    const time = hour !== undefined ? `${String(hour).padStart(2, '0')}:00` : undefined;
+    const time = hour !== undefined ? `${String(hour).padStart(2,'0')}:00` : undefined;
     setModal({ open: true, task: time ? { time } : null, defaultDate: dateKey ?? toDateKey(currentDate) });
   }
   function openEdit(t: Task) { if (!t.fromSheet) setModal({ open: true, task: t }); }
-  function saveTask(t: Omit<Task, 'id'> & { id?: string }) {
+  function saveTask(t: Omit<Task,'id'> & { id?: string }) {
     if (t.id) setTasks((prev) => prev.map((x) => x.id === t.id ? { ...x, ...t, id: t.id! } : x));
     else setTasks((prev) => [...prev, { ...t, id: nanoid() }]);
     setModal({ open: false, task: null });
@@ -475,11 +498,11 @@ export default function Calendario() {
   const selectedTasks = selectedKey ? tasks.filter((t) => t.date === selectedKey) : [];
   const todayTasks = tasks.filter((t) => t.date === today);
   const todayDone = todayTasks.filter((t) => t.completed).length;
+  const sheetTaskCount = tasks.filter((t) => t.fromSheet).length;
 
   return (
     <Layout title="Calendário">
       <div className="flex h-[calc(100vh-65px)] overflow-hidden">
-        {/* Main calendar */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Toolbar */}
           <div className="bg-white border-b border-gray-200 px-4 py-2.5 flex items-center gap-2 flex-wrap">
@@ -490,14 +513,14 @@ export default function Calendario() {
               <button onClick={() => navigate(1)} className="p-1.5 rounded hover:bg-gray-100 transition-colors">
                 <ChevronRight className="w-4 h-4 text-gray-600" />
               </button>
-              <button onClick={() => setCurrentDate(new Date())}
+              <button onClick={goToToday}
                 className="ml-1 px-3 py-1 text-xs rounded border border-gray-200 hover:bg-gray-50 font-medium">
                 Hoje
               </button>
             </div>
             <h2 className="text-sm font-bold text-[#2D1B29] min-w-[200px]">{headerLabel()}</h2>
             <div className="ml-auto flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
-              {(['month', 'week', 'day'] as ViewMode[]).map((v) => (
+              {(['month','week','day'] as ViewMode[]).map((v) => (
                 <button key={v} onClick={() => setView(v)}
                   className={cn('px-2.5 py-1 text-xs font-semibold rounded-md transition-all',
                     view === v ? 'bg-white text-[#592343] shadow-sm' : 'text-gray-500 hover:text-gray-700')}>
@@ -516,13 +539,14 @@ export default function Calendario() {
             </button>
           </div>
 
-          {/* Quote + stats bar */}
+          {/* Stats bar */}
           <div className="bg-gradient-to-r from-[#2D1B29] to-[#592343] px-4 py-2 flex items-center gap-3 text-white text-xs">
             <Quote className="w-3 h-3 text-[#C9A84C] shrink-0" />
-            <span className="italic truncate flex-1">{getDailyQuote(new Date().getMonth() + 1, new Date().getDate())}</span>
+            <span className="italic truncate flex-1">{getDailyQuote(todayReal.getMonth() + 1, todayReal.getDate())}</span>
             <div className="flex items-center gap-4 shrink-0 text-white/80">
               <span>Hoje: {todayDone}/{todayTasks.length} tarefas</span>
-              {rows.length > 0 && !sheetsError && <span className="text-emerald-300">● {rows.length} na planilha</span>}
+              {sheetTaskCount > 0 && !sheetsError && <span className="text-emerald-300">● {sheetTaskCount} eventos na planilha</span>}
+              {sheetsLoading && <span className="text-yellow-300">● Carregando planilha…</span>}
               {sheetsError && <span className="text-amber-300">● Planilha offline</span>}
             </div>
           </div>
@@ -545,7 +569,7 @@ export default function Calendario() {
 
           {/* Legend */}
           <div className="border-t border-gray-100 bg-white px-4 py-1.5 flex items-center gap-4 text-xs text-gray-500">
-            {(Object.entries(CATEGORY_CONFIG) as [TaskCategory, (typeof CATEGORY_CONFIG)[TaskCategory]][]).map(([k, cfg]) => (
+            {(Object.entries(CATEGORY_CONFIG) as [TaskCategory, typeof CATEGORY_CONFIG[TaskCategory]][]).map(([k, cfg]) => (
               <span key={k} className="flex items-center gap-1.5">
                 <span className={cn('w-2 h-2 rounded-full', cfg.dot)} />{cfg.label}
               </span>
@@ -570,28 +594,20 @@ export default function Calendario() {
                   </p>
                   <p className="text-xs text-white/60">{selectedTasks.length} tarefa{selectedTasks.length !== 1 ? 's' : ''}</p>
                 </div>
-                <button onClick={() => setSelectedKey(null)} className="p-1 rounded hover:bg-white/10">
-                  <X className="w-4 h-4" />
-                </button>
+                <button onClick={() => setSelectedKey(null)} className="p-1 rounded hover:bg-white/10"><X className="w-4 h-4" /></button>
               </div>
-
-              {/* Frase do dia */}
               <div className="mx-3 mt-3 p-3 bg-[#592343]/5 rounded-lg border border-[#592343]/10">
                 <p className="text-[10px] font-bold text-[#592343] uppercase tracking-wider mb-1">Frase do dia</p>
                 <p className="text-xs text-gray-600 italic leading-relaxed">
                   {(() => { const [, m, d] = selectedKey.split('-').map(Number); return getDailyQuote(m, d); })()}
                 </p>
               </div>
-
-              {/* Tasks */}
               <div className="flex-1 overflow-y-auto p-3 space-y-2">
                 {selectedTasks.length === 0 ? (
                   <div className="text-center py-10">
                     <Calendar className="w-8 h-8 text-gray-200 mx-auto mb-2" />
                     <p className="text-xs text-gray-400">Nenhuma tarefa</p>
-                    <button onClick={() => openNew(selectedKey)} className="mt-2 text-xs text-[#592343] hover:underline">
-                      + Adicionar
-                    </button>
+                    <button onClick={() => openNew(selectedKey)} className="mt-2 text-xs text-[#592343] hover:underline">+ Adicionar</button>
                   </div>
                 ) : selectedTasks.map((t) => {
                   const cfg = CATEGORY_CONFIG[t.category];
@@ -618,7 +634,6 @@ export default function Calendario() {
                   );
                 })}
               </div>
-
               <div className="p-3 border-t border-gray-100">
                 <button onClick={() => openNew(selectedKey)}
                   className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs text-[#592343] border border-[#592343]/30 rounded-lg hover:bg-[#592343]/5 transition-colors font-semibold">
@@ -630,7 +645,6 @@ export default function Calendario() {
         </AnimatePresence>
       </div>
 
-      {/* Task Modal */}
       <AnimatePresence>
         {modal.open && (
           <TaskModal task={modal.task} defaultDate={modal.defaultDate}
