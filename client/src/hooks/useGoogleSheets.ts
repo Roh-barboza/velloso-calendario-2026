@@ -12,24 +12,59 @@ export interface SheetData {
   error: string | null;
 }
 
-function parseGoogleSheetsJSON(jsonText: string): { headers: string[]; rows: SheetRow[] } {
-  const match = jsonText.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/);
-  if (!match) throw new Error('Formato de resposta inválido');
+// ─── URLs CSV Públicas (publicadas via Arquivo → Publicar na Web → CSV) ───────
+export const SHEET_URLS = {
+  /** Planilha 1 – Vendas */
+  vendas:
+    'https://docs.google.com/spreadsheets/d/e/2PACX-1vSLRDqgcYE4QpXZ3WeGzr5nDeeEVvIDPOVmTdshA0lZEGZA9m3PZSVRBZh30_sROKFJFd4Ll3l-Ar_v/pub?output=csv',
+  /** Planilha 2 – Clientes / Processos */
+  clientes:
+    'https://docs.google.com/spreadsheets/d/e/2PACX-1vSDxyW-yoO1Y9YngZEL5L4uAKx8Vd9A18Y7oF7OdqvjIUJBGdnuakVX6FJz63m1kb2TnkpFyuGNAuVz/pub?output=csv',
+  /** Planilha 3 – Calendário */
+  calendario:
+    'https://docs.google.com/spreadsheets/d/e/2PACX-1vRkhaBtnf2pTwGdZh8VroPSlvAjgfikS2pzrswllPTBJuYQrrB8PEJXKRUvqdzl7oLsU37gMGTEd-qC/pub?output=csv',
+} as const;
 
-  const data = JSON.parse(match[1]);
-  const table = data.table;
+// ─── CSV parser ───────────────────────────────────────────────────────────────
 
-  if (!table || !table.cols) throw new Error('Tabela não encontrada na planilha');
+function parseCsv(text: string): { headers: string[]; rows: SheetRow[] } {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
 
-  const headers: string[] = table.cols.map((col: { label?: string; id?: string }) => col.label || col.id || '');
+  if (lines.length === 0) return { headers: [], rows: [] };
 
-  const rows: SheetRow[] = (table.rows || []).map((row: { c: Array<{ v?: unknown; f?: string } | null> }) => {
-    const obj: SheetRow = {};
-    (row.c || []).forEach((cell, i: number) => {
-      const header = headers[i];
-      if (header) {
-        obj[header] = cell ? (cell.f ?? (cell.v !== null && cell.v !== undefined ? String(cell.v) : '')) : '';
+  function splitCsvLine(line: string): string[] {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (ch === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += ch;
       }
+    }
+    result.push(current.trim());
+    return result;
+  }
+
+  const headers = splitCsvLine(lines[0]);
+  const rows: SheetRow[] = lines.slice(1).map((line) => {
+    const cells = splitCsvLine(line);
+    const obj: SheetRow = {};
+    headers.forEach((h, i) => {
+      obj[h] = cells[i] ?? '';
     });
     return obj;
   });
@@ -37,11 +72,11 @@ function parseGoogleSheetsJSON(jsonText: string): { headers: string[]; rows: She
   return { headers, rows };
 }
 
-export function useGoogleSheets(
-  spreadsheetId: string,
-  gid?: string,
-  pollingInterval = 30000,
-  headersRow = 1
+// ─── Hook: busca por URL CSV direta ──────────────────────────────────────────
+
+export function useGoogleSheetsCsv(
+  csvUrl: string,
+  pollingInterval = 60000
 ): SheetData & { refresh: () => void } {
   const [data, setData] = useState<SheetData>({
     headers: [],
@@ -52,26 +87,25 @@ export function useGoogleSheets(
   });
 
   const fetchData = useCallback(async () => {
-    if (!spreadsheetId) return;
+    if (!csvUrl) return;
     setData((prev) => ({ ...prev, loading: true, error: null }));
     try {
-      const gidParam = gid ? `&gid=${gid}` : '';
-      const headersParam = headersRow > 1 ? `&headers=${headersRow}` : '';
-      const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:json${gidParam}${headersParam}`;
+      // Adiciona cache-buster para garantir dados frescos
+      const url = `${csvUrl}&cachebust=${Date.now()}`;
       const response = await fetch(url);
       if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       const text = await response.text();
-      const { headers, rows } = parseGoogleSheetsJSON(text);
+      const { headers, rows } = parseCsv(text);
       setData({ headers, rows, lastUpdated: new Date(), loading: false, error: null });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro desconhecido';
       setData((prev) => ({
         ...prev,
         loading: false,
-        error: `Não foi possível carregar os dados: ${msg}. Verifique se a planilha está publicada.`,
+        error: `Não foi possível carregar os dados: ${msg}`,
       }));
     }
-  }, [spreadsheetId, gid, headersRow]);
+  }, [csvUrl]);
 
   useEffect(() => {
     fetchData();
@@ -84,7 +118,25 @@ export function useGoogleSheets(
   return { ...data, refresh: fetchData };
 }
 
-// ─── Parsed helper types ────────────────────────────────────────────────────
+// ─── Hook legado (mantido para compatibilidade) ───────────────────────────────
+// Agora redireciona para o hook CSV baseado no spreadsheetId
+
+const LEGACY_ID_MAP: Record<string, keyof typeof SHEET_URLS> = {
+  '18X1WBzD_3NqHT7hS0F4SXTPQxgPb8yJkBZYpRTvzWqs': 'vendas',
+};
+
+export function useGoogleSheets(
+  spreadsheetId: string,
+  _gid?: string,
+  pollingInterval = 60000,
+  _headersRow = 1
+): SheetData & { refresh: () => void } {
+  const key = LEGACY_ID_MAP[spreadsheetId];
+  const csvUrl = key ? SHEET_URLS[key] : SHEET_URLS.vendas;
+  return useGoogleSheetsCsv(csvUrl, pollingInterval);
+}
+
+// ─── Parsed helper types ──────────────────────────────────────────────────────
 
 export interface ClienteRow {
   nome: string;
@@ -112,42 +164,43 @@ export interface VendaRow {
 }
 
 export interface CalendarioRow {
-  data?: string;       // DD/MM/YYYY from sheet
-  name?: string;       // Event name
-  tipo?: string;       // Aniversário / Feriado / Evento Especial
-  pais?: string;       // País
-  natureza?: string;   // Natureza
-  dateKey?: string;    // YYYY-MM-DD (parsed)
+  data?: string;
+  name?: string;
+  tipo?: string;
+  pais?: string;
+  natureza?: string;
+  dateKey?: string;
   [key: string]: string | undefined;
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Map the first non-empty match from a list of possible column names */
 function pick(row: SheetRow, candidates: string[]): string {
   for (const c of candidates) {
     const val = row[c];
     if (val !== undefined && val !== '') return val;
-    // case-insensitive fallback
     const key = Object.keys(row).find((k) => k.toLowerCase() === c.toLowerCase());
     if (key && row[key] !== undefined && row[key] !== '') return row[key];
   }
   return '';
 }
 
-// ─── Processos sheet (title in row 1, actual headers in row 2) ──────────────
-// Real columns: N°, Família, Tipo de Serviço, Vendedor, Cidades, Data,
-//               ETAPA Ação, Próxima Ação, Docs Pendentes, Total Contrato, Total Contratado
+// ─── normalizeProcessos ───────────────────────────────────────────────────────
 
 export function normalizeProcessos(rows: SheetRow[]): ClienteRow[] {
   return rows
     .filter((r) => {
       if (Object.values(r).every((v) => v === '')) return false;
       const nome = pick(r, ['Família', 'familia', 'Nome', 'nome', 'Name']);
-      // Skip header-repeat rows and title rows
       if (!nome) return false;
       const lower = nome.toLowerCase();
-      if (lower === 'família' || lower === 'nome' || lower.includes('velloso') || lower.includes('controle')) return false;
+      if (
+        lower === 'família' ||
+        lower === 'nome' ||
+        lower.includes('velloso') ||
+        lower.includes('controle')
+      )
+        return false;
       return true;
     })
     .map((r) => ({
@@ -163,7 +216,7 @@ export function normalizeProcessos(rows: SheetRow[]): ClienteRow[] {
     }));
 }
 
-// ─── Clientes sheet (same sheet as processos, same column structure) ────────
+// ─── normalizeClientes ────────────────────────────────────────────────────────
 
 export function normalizeClientes(rows: SheetRow[]): ClienteRow[] {
   return rows
@@ -172,7 +225,14 @@ export function normalizeClientes(rows: SheetRow[]): ClienteRow[] {
       const nome = pick(r, ['Família', 'familia', 'Nome', 'nome', 'Cliente', 'cliente', 'Name']);
       if (!nome) return false;
       const lower = nome.toLowerCase();
-      if (lower === 'família' || lower === 'nome' || lower === 'cliente' || lower.includes('velloso') || lower.includes('controle')) return false;
+      if (
+        lower === 'família' ||
+        lower === 'nome' ||
+        lower === 'cliente' ||
+        lower.includes('velloso') ||
+        lower.includes('controle')
+      )
+        return false;
       return true;
     })
     .map((r) => ({
@@ -183,17 +243,20 @@ export function normalizeClientes(rows: SheetRow[]): ClienteRow[] {
       etapa: pick(r, ['ETAPA Ação', 'Etapa', 'etapa', 'Fase', 'Stage']),
       valorPago: pick(r, ['Total Contrato', 'Total Contratado', 'Valor', 'valor', 'Pagamento']),
       dataInicio: pick(r, ['Data', 'data', 'Data Início', 'Data de Início', 'Created']),
-      observacoes: pick(r, ['Docs Pendentes', 'Próxima Ação', 'Observações', 'Obs', 'Notes']),
+      observacoes: pick(r, [
+        'Docs Pendentes',
+        'Próxima Ação',
+        'Observações',
+        'Obs',
+        'Notes',
+      ]),
       tipoServico: pick(r, ['Tipo de Serviço', 'Tipo', 'tipo']),
       vendedor: pick(r, ['Vendedor', 'vendedor']),
       ...r,
     }));
 }
 
-// ─── Vendas sheet ────────────────────────────────────────────────────────────
-// Real structure: col A = Vendedor (section header, sparse), B = Cliente,
-//                 C = Serviço Contratado, D = Valor
-// Has repeating header rows and total rows that must be skipped.
+// ─── normalizeVendas ──────────────────────────────────────────────────────────
 
 export function normalizeVendas(rows: SheetRow[]): VendaRow[] {
   let currentVendedor = '';
@@ -202,26 +265,37 @@ export function normalizeVendas(rows: SheetRow[]): VendaRow[] {
   for (const r of rows) {
     if (Object.values(r).every((v) => v === '')) continue;
 
-    // Use direct column names as primary, then fall back to positional
     const keys = Object.keys(r);
-    const vendedorCol = r['Vendedor'] ?? r['vendedor'] ?? (keys[0] ? r[keys[0]] : '') ?? '';
-    const clienteCol  = r['Cliente']  ?? r['cliente']  ?? (keys[1] ? r[keys[1]] : '') ?? '';
-    const servicoCol  = r['Serviço Contratado'] ?? r['Serviço'] ?? r['servico'] ?? r['Tipo'] ?? (keys[2] ? r[keys[2]] : '') ?? '';
-    const valorCol    = r['Valor']    ?? r['valor']    ?? r['Value'] ?? (keys[3] ? r[keys[3]] : '') ?? '';
+    const vendedorCol =
+      r['Vendedor'] ?? r['vendedor'] ?? (keys[0] ? r[keys[0]] : '') ?? '';
+    const clienteCol =
+      r['Cliente'] ?? r['cliente'] ?? (keys[1] ? r[keys[1]] : '') ?? '';
+    const servicoCol =
+      r['Serviço Contratado'] ??
+      r['Serviço'] ??
+      r['servico'] ??
+      r['Tipo'] ??
+      (keys[2] ? r[keys[2]] : '') ??
+      '';
+    const valorCol =
+      r['Valor'] ?? r['valor'] ?? r['Value'] ?? (keys[3] ? r[keys[3]] : '') ?? '';
 
-    // Skip header-repeat rows (where B = "Cliente")
     if (clienteCol.toLowerCase() === 'cliente') continue;
 
-    // If col A has a non-total, non-empty value, update current vendedor
-    if (vendedorCol && !vendedorCol.toLowerCase().includes('total') &&
-        vendedorCol.toLowerCase() !== 'vendedor') {
+    if (
+      vendedorCol &&
+      !vendedorCol.toLowerCase().includes('total') &&
+      vendedorCol.toLowerCase() !== 'vendedor'
+    ) {
       currentVendedor = vendedorCol;
     }
 
-    // Skip rows with no client name or that are total/subtotal rows
-    if (!clienteCol ||
-        clienteCol.toLowerCase().includes('total') ||
-        vendedorCol.toLowerCase().includes('total')) continue;
+    if (
+      !clienteCol ||
+      clienteCol.toLowerCase().includes('total') ||
+      vendedorCol.toLowerCase().includes('total')
+    )
+      continue;
 
     result.push({
       cliente: clienteCol,
@@ -238,24 +312,20 @@ export function normalizeVendas(rows: SheetRow[]): VendaRow[] {
   return result;
 }
 
-// ─── Calendário sheet ────────────────────────────────────────────────────────
-// Real columns: Data (DD/MM/YYYY), Name, Tipo, País, Natureza
+// ─── normalizeCalendario ──────────────────────────────────────────────────────
 
 export function normalizeCalendario(rows: SheetRow[]): CalendarioRow[] {
   return rows
     .filter((r) => {
       if (Object.values(r).every((v) => v === '')) return false;
       const data = pick(r, ['Data', 'data', 'DATE', 'Date']);
-      // Must have a date with digits
       if (!data || !/\d/.test(data)) return false;
-      // Skip header rows
       if (data.toLowerCase() === 'data' || data.toLowerCase() === 'date') return false;
       return true;
     })
     .map((r) => {
       const dataStr = pick(r, ['Data', 'data', 'DATE', 'Date']);
       let dateKey = '';
-      // Parse DD/MM/YYYY → YYYY-MM-DD
       const m = dataStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
       if (m) {
         dateKey = `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
