@@ -1,5 +1,6 @@
 import { router, publicProcedure } from "./_core/trpc";
 import { RDCrmService } from "./services/rdstation";
+import { GoogleSheetsService } from "./services/googleSheets";
 
 export const appRouter = router({
   // Rotas de autenticação
@@ -11,7 +12,7 @@ export const appRouter = router({
     }),
   }),
 
-  // Rotas de CRM
+  // Rotas de CRM (RD Station)
   crm: router({
     /**
      * Busca contatos do RD Station CRM
@@ -51,6 +52,72 @@ export const appRouter = router({
           success: false,
           data: [],
           message: error instanceof Error ? error.message : "Erro ao buscar deals"
+        };
+      }
+    }),
+  }),
+
+  // Rotas do Google Sheets
+  sheets: router({
+    /**
+     * Lê a planilha de Processos
+     */
+    getProcessos: publicProcedure.query(async () => {
+      try {
+        const data = await GoogleSheetsService.getProcessos();
+        return {
+          success: true,
+          data,
+          message: "Processos carregados com sucesso",
+        };
+      } catch (error) {
+        console.error("Erro ao ler planilha de Processos:", error);
+        return {
+          success: false,
+          data: [],
+          message: error instanceof Error ? error.message : "Erro ao ler planilha de Processos",
+        };
+      }
+    }),
+
+    /**
+     * Lê a planilha de Calendário (aniversários e eventos)
+     */
+    getCalendario: publicProcedure.query(async () => {
+      try {
+        const data = await GoogleSheetsService.getCalendario();
+        return {
+          success: true,
+          data,
+          message: "Calendário carregado com sucesso",
+        };
+      } catch (error) {
+        console.error("Erro ao ler planilha de Calendário:", error);
+        return {
+          success: false,
+          data: [],
+          message: error instanceof Error ? error.message : "Erro ao ler planilha de Calendário",
+        };
+      }
+    }),
+
+    /**
+     * Lê a planilha de Vendas do Mês
+     */
+    getVendas: publicProcedure.query(async () => {
+      try {
+        const data = await GoogleSheetsService.getVendas();
+        return {
+          success: true,
+          data,
+          message: "Vendas carregadas com sucesso",
+        };
+      } catch (error) {
+        console.error("Erro ao ler planilha de Vendas:", error);
+        return {
+          success: false,
+          data: [],
+          message: error instanceof Error ? error.message : "Erro ao ler planilha de Vendas",
         };
       }
     }),
