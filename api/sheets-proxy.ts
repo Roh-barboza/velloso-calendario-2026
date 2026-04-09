@@ -1,52 +1,61 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-// URLs CSV públicas das planilhas (publicadas via Arquivo → Publicar na Web → CSV)
-const SHEET_URLS: Record<string, string> = {
-  vendas:
-    'https://docs.google.com/spreadsheets/d/e/2PACX-1vSLRDqgcYE4QpXZ3WeGzr5nDeeEVvIDPOVmTdshA0lZEGZA9m3PZSVRBZh30_sROKFJFd4Ll3l-Ar_v/pub?output=csv',
-  clientes:
-    'https://docs.google.com/spreadsheets/d/e/2PACX-1vSDxyW-yoO1Y9YngZEL5L4uAKx8Vd9A18Y7oF7OdqvjIUJJBGdnuakVX6FJz63m1kb2TnkpFyuGNAuVz/pub?output=csv',
-  calendario:
-    'https://docs.google.com/spreadsheets/d/e/2PACX-1vRkhaBtnf2pTwGdZh8VroPSlvAjgfikS2pzrswllPTBJuYQrrB8PEJXKRUvqdzl7oLsU37gMGTEd-qC/pub?output=csv',
+// URLs padrão — sobrescritas pelas env vars da Vercel ou pelo parâmetro ?url=
+const DEFAULT_URLS: Record<string, string> = {
+  vendas: process.env.SHEET_URL_VENDAS ?? '',
+  clientes: process.env.SHEET_URL_CLIENTES ?? '',
+  processos: process.env.SHEET_URL_PROCESSOS ?? '',
+  calendario: process.env.SHEET_URL_CALENDARIO ?? '',
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS headers — permite que o frontend (mesmo domínio ou preview) acesse
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const sheet = (req.query.sheet as string) ?? '';
+  // Aceita ?url=<csv_url_direta> OU ?sheet=<nome>
+  const directUrl = req.query.url as string | undefined;
+  const sheetName = req.query.sheet as string | undefined;
 
-  if (!sheet || !SHEET_URLS[sheet]) {
+  let targetUrl = '';
+
+  if (directUrl) {
+    // Valida que é uma URL do Google Sheets
+    if (!directUrl.includes('docs.google.com') && !directUrl.includes('spreadsheets')) {
+      return res.status(400).json({ error: 'URL inválida. Use uma URL do Google Sheets.' });
+    }
+    // Garante que retorna CSV
+    targetUrl = directUrl.includes('output=csv') ? directUrl : directUrl + (directUrl.includes('?') ? '&output=csv' : '?output=csv');
+  } else if (sheetName && DEFAULT_URLS[sheetName]) {
+    targetUrl = DEFAULT_URLS[sheetName];
+    if (!targetUrl) {
+      return res.status(404).json({
+        error: `URL para "${sheetName}" não configurada. Acesse /configuracoes para definir.`,
+        notConfigured: true,
+      });
+    }
+  } else {
     return res.status(400).json({
-      error: `Parâmetro "sheet" inválido. Use: ${Object.keys(SHEET_URLS).join(', ')}`,
+      error: 'Informe ?sheet=<nome> ou ?url=<csv_url>. Nomes válidos: ' + Object.keys(DEFAULT_URLS).join(', '),
     });
   }
 
   try {
-    const upstream = await fetch(SHEET_URLS[sheet], {
-      headers: {
-        // Impede que o Google retorne HTML de aviso em vez do CSV
-        Accept: 'text/csv,text/plain,*/*',
-      },
+    const upstream = await fetch(targetUrl, {
+      headers: { Accept: 'text/csv,text/plain,*/*' },
     });
 
     if (!upstream.ok) {
       return res.status(upstream.status).json({
-        error: `Google Sheets retornou ${upstream.status}: ${upstream.statusText}`,
+        error: `Google Sheets retornou ${upstream.status}. Verifique se a planilha está publicada como CSV.`,
       });
     }
 
     const text = await upstream.text();
-
-    // Repassa o CSV com cache de 2 minutos
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=60');
+    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=30');
     return res.status(200).send(text);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
