@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Layout from '@/components/Layout';
-import { useGoogleSheetsCsv, SHEET_URLS, SheetRow } from '@/hooks/useGoogleSheets';
+import { useSheetByName, normalizeClientes, SheetRow } from '@/hooks/useGoogleSheets';
 import { cn } from '@/lib/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -168,7 +168,7 @@ function ClientCard({ client }: { client: ClienteRow }) {
 export default function Clientes() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const { rows, loading, error, refresh, lastUpdated } = useGoogleSheetsCsv(SHEET_URLS.clientes, 60000);
+  const { rows, loading, error, refresh, lastUpdated } = useSheetByName('clientes', 60000);
 
   // Normaliza as linhas reais da planilha — filtra cabeçalhos e vazias
   const clientes = useMemo(() => {

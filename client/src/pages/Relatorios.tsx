@@ -4,11 +4,8 @@ import {
   BarChart3, Clock, TrendingUp,
 } from 'lucide-react';
 import Layout from '@/components/Layout';
-import { useGoogleSheets, normalizeClientes } from '@/hooks/useGoogleSheets';
+import { useSheetByName, normalizeClientes } from '@/hooks/useGoogleSheets';
 import { cn } from '@/lib/utils';
-
-const SHEET_ID = '18X1WBzD_3NqHT7hS0F4SXTPQxgPb8yJkBZYpRTvzWqs';
-const SHEET_GID = '2009268709';
 
 // ─── Task storage (same key as Calendario) ────────────────────────────────────
 
@@ -55,7 +52,7 @@ function exportCSV(rows: string[][], filename: string) {
 export default function Relatorios() {
   const [reportDate, setReportDate] = useState(toDateKey(new Date()));
   const tasks = useMemo(loadTasks, []);
-  const { rows, loading, error, refresh } = useGoogleSheets(SHEET_ID, SHEET_GID, 60000, 2);
+  const { rows, loading, error, refresh } = useSheetByName('processos', 60000);
   const clientes = useMemo(() => normalizeClientes(rows), [rows]);
 
   // Tasks for selected date

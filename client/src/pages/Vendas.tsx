@@ -9,7 +9,7 @@ import {
 } from 'recharts';
 import { motion } from 'framer-motion';
 import Layout from '@/components/Layout';
-import { useGoogleSheetsCsv, SHEET_URLS, SheetRow } from '@/hooks/useGoogleSheets';
+import { useSheetByName, SheetRow } from '@/hooks/useGoogleSheets';
 import { cn } from '@/lib/utils';
 
 const CHART_COLORS = ['#592343','#C9A84C','#00924a','#ce2b37','#4a90d9','#8b6b7d'];
@@ -142,7 +142,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Vendas() {
   const [period, setPeriod] = useState<'daily' | 'monthly'>('monthly');
-  const { rows, loading, error, refresh, lastUpdated } = useGoogleSheetsCsv(SHEET_URLS.vendas, 60000);
+  const { rows, loading, error, refresh, lastUpdated } = useSheetByName('vendas', 60000);
 
   const vendas = useMemo(() => parseVendas(rows), [rows]);
   const hasData = vendas.length > 0;
