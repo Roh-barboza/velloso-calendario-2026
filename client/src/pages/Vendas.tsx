@@ -210,8 +210,8 @@ export default function Vendas() {
           </div>
           <div className="flex items-center gap-2">
             {error && (
-              <span className="text-xs text-amber-600 flex items-center gap-1 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200">
-                <AlertCircle className="w-3 h-3" />Planilha offline — dados de exemplo
+              <span className="text-xs text-red-600 flex items-center gap-1 bg-red-50 px-3 py-1.5 rounded-lg border border-red-200 max-w-xs">
+                <AlertCircle className="w-3 h-3 shrink-0" />{error}
               </span>
             )}
             <button onClick={refresh}

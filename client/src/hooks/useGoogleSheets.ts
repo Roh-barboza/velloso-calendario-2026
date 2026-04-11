@@ -147,6 +147,10 @@ export function useSheetByName(
       const res = await fetch(csvUrl);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const text = await res.text();
+      // Se a resposta for HTML, a planilha não está publicada corretamente
+      if (text.trim().startsWith('<')) {
+        throw new Error('Planilha não publicada — acesse Arquivo → Publicar na web → CSV e copie o link');
+      }
       const skip = SKIP_ROWS[sheetName] ?? 0;
       const { headers, rows } = parseCsv(text, skip);
       console.info(`[Sheet:${sheetName}] headers:`, headers, `| rows:${rows.length}`);
