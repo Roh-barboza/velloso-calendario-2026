@@ -262,6 +262,11 @@ export function normalizeClientes(rows: SheetRow[]): ClienteRow[] {
 }
 
 export function normalizeVendas(rows: SheetRow[]): VendaRow[] {
+  if (rows.length > 0) {
+    console.info('[normalizeVendas] headers:', Object.keys(rows[0]));
+    console.info('[normalizeVendas] first row:', rows[0]);
+    console.info('[normalizeVendas] total rows received:', rows.length);
+  }
   let currentVendedor = '';
   const result: VendaRow[] = [];
 
@@ -270,8 +275,8 @@ export function normalizeVendas(rows: SheetRow[]): VendaRow[] {
 
     const keys = Object.keys(r);
     const vendedorCol = pick(r, ['Vendedor','vendedor']) || (keys[0] ? r[keys[0]] : '') || '';
-    const clienteCol  = pick(r, ['Cliente','cliente','Nome','name']) || (keys[1] ? r[keys[1]] : '') || '';
-    const servicoCol  = pick(r, ['Serviço Contratado','Serviço','servico','Tipo','tipo']) || (keys[2] ? r[keys[2]] : '') || '';
+    const clienteCol  = pick(r, ['Cliente','cliente','Nome','nome','name','Família','Familia','familia']) || (keys[1] ? r[keys[1]] : '') || '';
+    const servicoCol  = pick(r, ['Serviço Contratado','Serviço','servico','Tipo','tipo','Service','SERVICE']) || (keys[2] ? r[keys[2]] : '') || '';
     const valorCol    = pick(r, ['Valor','valor','Value']) || (keys[3] ? r[keys[3]] : '') || '';
 
     if (['cliente','client','nome'].includes(clienteCol.toLowerCase())) continue;
@@ -296,6 +301,7 @@ export function normalizeVendas(rows: SheetRow[]): VendaRow[] {
       ...r,
     });
   }
+  console.info('[normalizeVendas] parsed rows:', result.length, result.slice(0,3));
   return result;
 }
 

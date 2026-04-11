@@ -9,23 +9,14 @@ import {
 } from 'recharts';
 import { motion } from 'framer-motion';
 import Layout from '@/components/Layout';
-import { useSheetByName, SheetRow } from '@/hooks/useGoogleSheets';
+import { useSheetByName, normalizeVendas, SheetRow } from '@/hooks/useGoogleSheets';
 import { cn } from '@/lib/utils';
 
 const CHART_COLORS = ['#592343','#C9A84C','#00924a','#ce2b37','#4a90d9','#8b6b7d'];
 
 const MONTH_LABELS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
-// ─── Parser tolerante de vendas ───────────────────────────────────────────────
-function pickVal(row: SheetRow, keys: string[]): string {
-  for (const k of keys) {
-    if (row[k]?.trim()) return row[k].trim();
-    const found = Object.keys(row).find((rk) => rk.toLowerCase() === k.toLowerCase());
-    if (found && row[found]?.trim()) return row[found].trim();
-  }
-  return '';
-}
-
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface VendaRow {
   cliente: string;
   valor: string;
@@ -34,53 +25,7 @@ interface VendaRow {
   data: string;
   status: string;
   descricao: string;
-}
-
-function parseVendas(rows: SheetRow[]): VendaRow[] {
-  const result: VendaRow[] = [];
-  let currentVendedor = '';
-
-  for (const row of rows) {
-    if (Object.values(row).every((v) => !v?.trim())) continue;
-
-    // Detecta linha de vendedor (primeira coluna preenchida, sem cliente)
-    const cols = Object.keys(row);
-    const col0 = cols[0] ? row[cols[0]]?.trim() ?? '' : '';
-    const col1 = cols[1] ? row[cols[1]]?.trim() ?? '' : '';
-
-    const cliente = pickVal(row, ['Cliente','cliente','CLIENTE','Name','nome','Família','Familia']);
-    const valor   = pickVal(row, ['Valor','valor','VALOR','Value','Total','total']);
-    const tipo    = pickVal(row, ['Serviço Contratado','Serviço','Servico','servico','Tipo','tipo','Service']);
-    const data    = pickVal(row, ['Data','data','DATA','Date','date']);
-    const status  = pickVal(row, ['Status','status','STATUS','Situação','situação']);
-    const desc    = pickVal(row, ['Descrição','Descricao','Obs','obs','Observações','Notes']);
-
-    // Ignora linhas de cabeçalho
-    if (cliente.toLowerCase() === 'cliente' || cliente.toLowerCase() === 'nome') continue;
-
-    // Detecta linha de vendedor (col0 preenchida, col1 vazia ou col0 é nome sem valor)
-    if (col0 && !col1 && !valor) {
-      if (!col0.toLowerCase().includes('total') && col0.toLowerCase() !== 'vendedor') {
-        currentVendedor = col0;
-      }
-      continue;
-    }
-
-    // Ignora totais
-    if (!cliente || col0.toLowerCase().includes('total') || cliente.toLowerCase().includes('total')) continue;
-
-    result.push({
-      cliente,
-      valor: valor || '',
-      tipo: tipo || '',
-      vendedor: pickVal(row, ['Vendedor','vendedor','VENDEDOR']) || currentVendedor,
-      data: data || '',
-      status: status || '',
-      descricao: desc || '',
-    });
-  }
-
-  return result;
+  [key: string]: string | undefined;
 }
 
 function parseMoney(v: string): number {
@@ -144,7 +89,7 @@ export default function Vendas() {
   const [period, setPeriod] = useState<'daily' | 'monthly'>('monthly');
   const { rows, loading, error, refresh, lastUpdated } = useSheetByName('vendas', 60000);
 
-  const vendas = useMemo(() => parseVendas(rows), [rows]);
+  const vendas = useMemo(() => normalizeVendas(rows) as VendaRow[], [rows]);
   const hasData = vendas.length > 0;
 
   // ─── KPIs ─────────────────────────────────────────────────────────────────
