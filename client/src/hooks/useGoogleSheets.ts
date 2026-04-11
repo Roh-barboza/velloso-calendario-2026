@@ -262,46 +262,79 @@ export function normalizeClientes(rows: SheetRow[]): ClienteRow[] {
 }
 
 export function normalizeVendas(rows: SheetRow[]): VendaRow[] {
-  if (rows.length > 0) {
-    console.info('[normalizeVendas] headers:', Object.keys(rows[0]));
-    console.info('[normalizeVendas] first row:', rows[0]);
-    console.info('[normalizeVendas] total rows received:', rows.length);
-  }
+  if (rows.length === 0) return [];
+
+  const headers = Object.keys(rows[0]);
+  console.info('[normalizeVendas] headers:', headers, '| total rows:', rows.length);
+  console.info('[normalizeVendas] row[0]:', rows[0]);
+  console.info('[normalizeVendas] row[1]:', rows[1]);
+
+  // Mapeia índice de cada campo pelo nome do cabeçalho (case-insensitive + normalizado)
+  const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const findIdx = (candidates: string[]) => {
+    const c = candidates.map(norm);
+    return headers.findIndex(h => c.some(k => norm(h).includes(k)));
+  };
+
+  const idxVendedor = findIdx(['vendedor','seller','consultor']);
+  const idxCliente  = findIdx(['cliente','familia','nome','name','lead']);
+  const idxServico  = findIdx(['servico','tipo','service','contrato']);
+  const idxValor    = findIdx(['valor','total','value','price','preco']);
+  const idxData     = findIdx(['data','date','entrada']);
+  const idxStatus   = findIdx(['status','situacao','situação','estado']);
+
+  console.info('[normalizeVendas] col indices →', { idxVendedor, idxCliente, idxServico, idxValor, idxData, idxStatus });
+
+  const getCol = (row: SheetRow, idx: number, fallbackIdx?: number): string => {
+    if (idx >= 0 && row[headers[idx]]?.trim()) return row[headers[idx]].trim();
+    if (fallbackIdx !== undefined && fallbackIdx >= 0 && row[headers[fallbackIdx]]?.trim())
+      return row[headers[fallbackIdx]].trim();
+    return '';
+  };
+
   let currentVendedor = '';
   const result: VendaRow[] = [];
 
   for (const r of rows) {
-    if (Object.values(r).every(v => !v.trim())) continue;
+    // Pula linhas completamente vazias
+    if (Object.values(r).every(v => !v?.trim())) continue;
 
-    const keys = Object.keys(r);
-    const vendedorCol = pick(r, ['Vendedor','vendedor']) || (keys[0] ? r[keys[0]] : '') || '';
-    const clienteCol  = pick(r, ['Cliente','cliente','Nome','nome','name','Família','Familia','familia']) || (keys[1] ? r[keys[1]] : '') || '';
-    const servicoCol  = pick(r, ['Serviço Contratado','Serviço','servico','Tipo','tipo','Service','SERVICE']) || (keys[2] ? r[keys[2]] : '') || '';
-    const valorCol    = pick(r, ['Valor','valor','Value']) || (keys[3] ? r[keys[3]] : '') || '';
+    // Detecta linha de cabeçalho repetida
+    const firstVal = Object.values(r).find(v => v?.trim()) ?? '';
+    if (['vendedor','seller','cliente','client','nome'].includes(firstVal.trim().toLowerCase())) continue;
+    if (firstVal.trim().toLowerCase().includes('vendedor') && Object.values(r).filter(v => v?.trim()).length <= 2) continue;
 
-    if (['cliente','client','nome'].includes(clienteCol.toLowerCase())) continue;
-    if (['vendedor','seller'].includes(vendedorCol.toLowerCase())) continue;
+    const vendedor = getCol(r, idxVendedor);
+    // Usa fallback posicional para cliente: col 1 se não tiver coluna dedicada
+    const cliente  = getCol(r, idxCliente, idxCliente < 0 ? 1 : undefined);
+    const servico  = getCol(r, idxServico,  idxServico  < 0 ? 2 : undefined);
+    const valor    = getCol(r, idxValor,    idxValor    < 0 ? 3 : undefined);
+    const data     = getCol(r, idxData,     idxData     < 0 ? 4 : undefined);
+    const status   = getCol(r, idxStatus,   idxStatus   < 0 ? 5 : undefined);
 
-    if (vendedorCol && !vendedorCol.toLowerCase().includes('total') && !/^\d/.test(vendedorCol)) {
-      currentVendedor = vendedorCol;
+    // Linha de vendedor (col 0 preenchida, col 1 vazia)
+    if (vendedor && !cliente && !valor) {
+      if (!norm(vendedor).includes('total')) currentVendedor = vendedor;
+      continue;
     }
 
-    if (!clienteCol) continue;
-    if (clienteCol.toLowerCase().includes('total')) continue;
-    if (vendedorCol.toLowerCase().includes('total')) continue;
+    // Ignora totais
+    if (norm(cliente).includes('total') || norm(vendedor).includes('total')) continue;
+    if (!cliente && !valor) continue;
 
     result.push({
-      cliente:  clienteCol,
-      valor:    valorCol,
-      tipo:     servicoCol,
-      vendedor: currentVendedor,
-      data:     pick(r, ['Data','data','Date']),
-      status:   pick(r, ['Status','status','Situação']),
-      descricao:pick(r, ['Descrição','Observações','Obs']),
+      cliente:   cliente  || vendedor,
+      valor:     valor    || '',
+      tipo:      servico  || '',
+      vendedor:  vendedor || currentVendedor,
+      data:      data     || '',
+      status:    status   || '',
+      descricao: pick(r, ['Descrição','Descricao','Observações','Obs','obs']),
       ...r,
     });
   }
-  console.info('[normalizeVendas] parsed rows:', result.length, result.slice(0,3));
+
+  console.info('[normalizeVendas] parsed rows:', result.length, result.slice(0, 3));
   return result;
 }
 

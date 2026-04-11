@@ -90,7 +90,11 @@ export default function Vendas() {
   const { rows, loading, error, refresh, lastUpdated } = useSheetByName('vendas', 60000);
 
   const vendas = useMemo(() => normalizeVendas(rows) as VendaRow[], [rows]);
+  // hasData: planilha carregou E parser encontrou registros válidos
+  const sheetLoaded = rows.length > 0 && !error;
   const hasData = vendas.length > 0;
+  // rawHeaders: colunas reais da planilha (para diagnóstico)
+  const rawHeaders = useMemo(() => rows.length > 0 ? Object.keys(rows[0]) : [], [rows]);
 
   // ─── KPIs ─────────────────────────────────────────────────────────────────
   const totalReceita = useMemo(() => {
@@ -296,38 +300,66 @@ export default function Vendas() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
             <h3 className="font-bold text-[#2D1B29] text-sm">
-              {hasData ? 'Registros Recentes' : 'Vendas Recentes (Exemplo)'}
+              {hasData ? 'Registros Recentes' : sheetLoaded ? 'Dados Brutos da Planilha' : 'Vendas Recentes (Exemplo)'}
             </h3>
             <span className="text-xs text-gray-400 flex items-center gap-1">
               <Calendar className="w-3 h-3" />{new Date().toLocaleDateString('pt-BR')}
             </span>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  {['Data','Cliente','Tipo','Valor','Status'].map((h) => (
-                    <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {recentVendas.map((v, i) => (
-                  <tr key={i} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 text-gray-600 text-xs">{v.data}</td>
-                    <td className="px-4 py-3 font-medium text-gray-800">{v.cliente}</td>
-                    <td className="px-4 py-3 text-gray-600">{v.tipo}</td>
-                    <td className="px-4 py-3 font-semibold text-[#592343]">{v.valor}</td>
-                    <td className="px-4 py-3">
-                      <span className={cn('px-2 py-0.5 rounded-full text-xs font-semibold', getStatusColor(v.status))}>
-                        {v.status}
-                      </span>
-                    </td>
+
+          {/* Planilha carregou mas parser não reconheceu as colunas → exibe dados brutos */}
+          {sheetLoaded && !hasData ? (
+            <div className="overflow-x-auto">
+              <p className="text-xs text-amber-700 bg-amber-50 px-4 py-2 border-b border-amber-100">
+                Planilha carregada ({rows.length} linhas), mas as colunas não foram reconhecidas automaticamente. Exibindo dados brutos:
+              </p>
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50">
+                  <tr>
+                    {rawHeaders.map((h) => (
+                      <th key={h} className="text-left px-3 py-2 font-semibold text-gray-500 whitespace-nowrap border-r border-gray-100 last:border-0">{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {rows.slice(0, 15).map((row, i) => (
+                    <tr key={i} className="hover:bg-gray-50">
+                      {rawHeaders.map((h) => (
+                        <td key={h} className="px-3 py-2 text-gray-700 whitespace-nowrap border-r border-gray-50 last:border-0">{row[h] || ''}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    {['Data','Cliente','Tipo','Valor','Status'].map((h) => (
+                      <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {recentVendas.map((v, i) => (
+                    <tr key={i} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3 text-gray-600 text-xs">{v.data}</td>
+                      <td className="px-4 py-3 font-medium text-gray-800">{v.cliente}</td>
+                      <td className="px-4 py-3 text-gray-600">{v.tipo}</td>
+                      <td className="px-4 py-3 font-semibold text-[#592343]">{v.valor}</td>
+                      <td className="px-4 py-3">
+                        <span className={cn('px-2 py-0.5 rounded-full text-xs font-semibold', getStatusColor(v.status))}>
+                          {v.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </Layout>
