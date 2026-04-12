@@ -114,19 +114,73 @@ export const GoogleSheetsService = {
    * Colunas: Vendedor (col A), Cliente (col B), Serviço Contratado (col C), Valor (col D)
    */
   async getVendas(): Promise<SheetRow[]> {
-    const rows = await readSheetCSV(SHEET_URLS.vendas);
-    // Filtra apenas linhas com cliente e valor preenchidos, ignorando títulos e totais
-    return rows.filter((row) => {
-      const vals = Object.values(row);
-      const cliente = vals[1] ?? '';
-      const valor = vals[3] ?? '';
-      return (
-        cliente !== '' &&
-        cliente !== 'Cliente' &&
-        valor !== '' &&
-        valor !== 'Valor' &&
-        !cliente.match(/^\d+$/) // ignora linhas de total (ex: "4", "14")
-      );
+    const response = await fetch(SHEET_URLS.vendas, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
     });
+
+    if (!response.ok) {
+      throw new Error(`Erro ao acessar planilha: ${response.status} ${response.statusText}`);
+    }
+
+    const csvText = await response.text();
+    const lines = csvText.split(/\r?\n/).map((l) => l.trim());
+
+    // Procura a linha que contém os cabeçalhos reais (Cliente, Serviço Contratado, Valor)
+    const headerIdx = lines.findIndex((l) => l.includes('Cliente') && l.includes('Valor'));
+    if (headerIdx === -1) return [];
+
+    const dataLines = lines.slice(headerIdx + 1);
+    const results: SheetRow[] = [];
+
+    // Helper para split de CSV simples (já que não estamos usando o parseCSV global aqui para ter mais controle)
+    const splitCSV = (line: string) => {
+      const result: string[] = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          result.push(current.trim());
+          current = '';
+        } else current += char;
+      }
+      result.push(current.trim());
+      return result;
+    };
+
+    for (const line of dataLines) {
+      if (!line || line.replace(/,/g, '').trim() === '') continue;
+
+      const cells = splitCSV(line);
+      // Pela estrutura observada:
+      // Col 0: Vendedor (pode estar vazio se for o mesmo da linha anterior)
+      // Col 1: Cliente
+      // Col 2: Serviço Contratado
+      // Col 3: Valor
+      const cliente = cells[1] ?? '';
+      const valor = cells[3] ?? '';
+
+      if (
+        cliente &&
+        cliente !== 'Cliente' &&
+        valor &&
+        valor !== 'Valor' &&
+        !cliente.match(/^\d+$/) // Ignora linhas de totalizador
+      ) {
+        results.push({
+          vendedor: cells[0] || (results.length > 0 ? results[results.length - 1].vendedor : ''),
+          cliente,
+          servico: cells[2] ?? '',
+          valor,
+        });
+      }
+    }
+
+    return results;
   },
 };
