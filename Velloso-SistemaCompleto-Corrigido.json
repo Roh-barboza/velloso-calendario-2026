@@ -1,0 +1,1791 @@
+{
+  "name": "Velloso - Sistema Completo + Limpeza",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "2dcd7f8a-982c-486a-b159-e5f7e8067919",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vSJNAR8FC899iEkZ5yxzFwR91vKR81XoeAMZVgNX--IHQRxwx_9DGNEAf-gNzoWthbSeJ4yDVmKGuVw/pub?output=csv",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "4833fa90-101c-48aa-b654-0e35eef62410",
+      "name": "HTTP - CSV Principal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        272,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://docs.google.com/spreadsheets/d/1py0vPJe2zBtCWhrdrOYDKfxE8o1t9CfaWSsdMmnqjzE/pub?output=csv",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "c12190e3-6432-4a8d-9c0d-bb845619478b",
+      "name": "HTTP - CSV Sheets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        528,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// VELLOSO - FILTRO E NORMALIZACAO DE LEADS\n// Le duas planilhas CSV, filtra, normaliza e retorna leads validos\n// ============================================================\n\nconst csv1 = $('HTTP - CSV Principal').first().json.data || '';\nconst csv2 = $json.data || '';\n\n// --- Mapeamento de colunas ---\n// Aliases atualizados com os nomes REAIS das colunas do CSV Principal:\n// Colunas reais confirmadas: nome, biografia, celular, email\nconst ALIASES = {\n  nome:       ['nome','name','nome completo','full name','cliente','contato'],\n  telefone:   ['telefone','whatsapp','celular','fone','phone','tel','telefone/whatsapp','numero','numero','celular/whatsapp','telefone / whatsapp'],\n  email:      ['email','e-mail','mail'],\n  cidade:     ['cidade','city'],\n  estado:     ['estado','state','uf'],\n  profissao:  ['profissao','profissao','cargo','ocupacao','ocupacao','profession','area','area'],\n  observacao: ['observacao','observacao','obs','notes','biografia','bio','descricao','descricao','sobre']\n};\n\nfunction normKey(k) {\n  return String(k||'').toLowerCase().normalize('NFKD')\n    .replace(/[\\u0300-\\u036f]/g,'').replace(/[^a-z0-9]/g,'');\n}\n\nconst HEADER_MAP = {};\nfor (const [std, aliases] of Object.entries(ALIASES)) {\n  aliases.forEach(a => { HEADER_MAP[normKey(a)] = std; });\n}\n\n// --- Deteccao automatica de delimitador ---\nfunction detectDelimiter(text) {\n  const firstLine = text.split('\\n')[0] || '';\n  const commas = (firstLine.match(/,/g) || []).length;\n  const semis  = (firstLine.match(/;/g) || []).length;\n  const tabs   = (firstLine.match(/\\t/g) || []).length;\n  if (tabs > commas && tabs > semis) return '\\t';\n  if (semis > commas) return ';';\n  return ',';\n}\n\n// --- Parser CSV robusto ---\nfunction parseCSV(text, delimiter) {\n  if (!text || !text.trim()) return [];\n  if (!delimiter) delimiter = detectDelimiter(text);\n  const rows = [];\n  let row = [], field = '', inQ = false;\n  for (let i = 0; i < text.length; i++) {\n    const c = text[i], n = text[i+1];\n    if (c === '\"') {\n      if (inQ && n === '\"') { field += '\"'; i++; }\n      else inQ = !inQ;\n    } else if (c === delimiter && !inQ) {\n      row.push(field); field = '';\n    } else if ((c === '\\n' || c === '\\r') && !inQ) {\n      if (c === '\\r' && n === '\\n') i++;\n      row.push(field);\n      if (row.some(v => String(v).trim())) rows.push(row);\n      row = []; field = '';\n    } else {\n      field += c;\n    }\n  }\n  row.push(field);\n  if (row.some(v => String(v).trim())) rows.push(row);\n  if (!rows.length) return [];\n  const rawH = rows[0].map(h => normKey(h));\n  const headers = rawH.map(h => HEADER_MAP[h] || h);\n  return rows.slice(1).map(cols => {\n    const obj = {};\n    headers.forEach((h, i) => { obj[h] = String(cols[i]||'').trim(); });\n    return obj;\n  });\n}\n\n// --- Telefone ---\nfunction normalizePhone(p) {\n  let n = String(p||'').replace(/\\D/g,'');\n  if (n.startsWith('55') && n.length >= 12) n = n.slice(2);\n  if (n.length === 10 || n.length === 11) return '55' + n;\n  return null;\n}\n\nfunction isValidPhone(p) {\n  const DDDS_BR = new Set([\n    11,12,13,14,15,16,17,18,19,\n    21,22,24,27,28,\n    31,32,33,34,35,37,38,\n    41,42,43,44,45,46,47,48,49,\n    51,53,54,55,\n    61,62,63,64,65,66,67,68,69,\n    71,73,74,75,77,79,\n    81,82,83,84,85,86,87,88,89,\n    91,92,93,94,95,96,97,98,99\n  ]);\n  let n = String(p||'').replace(/\\D/g,'');\n  if (n.startsWith('55') && n.length >= 12) n = n.slice(2);\n  if (n.length !== 10 && n.length !== 11) return false;\n  const ddd = parseInt(n.slice(0,2), 10);\n  const num = n.slice(2);\n  if (!DDDS_BR.has(ddd)) return false;\n  if (/^(\\d)\\1+$/.test(num)) return false;\n  if (n.length === 11 && !/^9/.test(num)) return false;\n  if (n.length === 10 && !/^[2-5]/.test(num)) return false;\n  return true;\n}\n\n// --- Email pessoal ---\nconst PERSONAL_DOMAINS = new Set([\n  'gmail.com','hotmail.com','hotmail.com.br','outlook.com','outlook.com.br',\n  'live.com','yahoo.com','yahoo.com.br','icloud.com','me.com',\n  'uol.com.br','bol.com.br','terra.com.br','ig.com.br','globo.com'\n]);\n\nfunction isEmailOK(e) {\n  const em = String(e||'').toLowerCase().trim();\n  if (!em || !em.includes('@')) return true;\n  const parts = em.split('@');\n  if (parts.length !== 2) return false;\n  const [local, domain] = parts;\n  if (!PERSONAL_DOMAINS.has(domain)) return false;\n  if (/^(contato|comercial|vendas|financeiro|rh|suporte|atendimento|sac|admin|juridico|marketing|info|hello|reservas|orcamento)$/i.test(local)) return false;\n  return true;\n}\n\n// --- Filtros de exclusão (somente o que DEVE ser bloqueado) ---\n// Advogados e escritórios jurídicos\nconst RE_JURIDICO = /\\b(oab|advogad[oa]|advocacia|jur[íi]dico|procurador|defensoria|escritório de advocacia)\\b/i;\n// Concorrentes diretos: cidadania, passaporte, visto, cartório, tradução, apostilamento\nconst RE_BLOQUEADO = /cidadania italiana|cidadania europeia|cidadania portuguesa|cidadania espanhola|passaporte italiano|passaporte europeu|visto europeu|passaporto italiano|dupla cidadania|regulariza[cç][aã]o de cidadania|empresa de cidadania|cart[oó]rio|tabelionato|tabeli[aã]o|registro civil|tradu[cç][aã]o juramentada|tradutor[a]? juramentad[oa]|apostilamento|apostila de haia/i;\n\n// --- Categoria ---\nconst RE_ITALIA    = /bisav[o\\xf4]|trisav[o\\xf4]|antepassado|ascend[e\\xea]ncia italiana|descendente italiano|\\xe1rvore geneal\\xf3gica|arvore genealogica/i;\nconst RE_SAUDE     = /\\b(m[e\\xe9]dic[oa]|enfermei[ro]|dentista|farmac[e\\xea]utic[oa]|fisioterapeuta|psic[o\\xf3]log[oa]|nutricionista|biom[e\\xe9]dic[oa]|veterin[a\\xe1]ri[oa]|cirurgi[a\\xe3]o|radiologista|\\bcrm\\b)\\b/i;\nconst RE_PROF      = /\\b(engenheir[oa]|arquitet[oa]|contad[oa]r|economista|administrad[oa]r|gerente|diretor[a]?|professor[a]?|analista|coordenad[oa]r)\\b/i;\n\nfunction detectCategory(nome, profissao, obs) {\n  const t = [nome, profissao, obs].join(' ');\n  if (RE_ITALIA.test(t))  return 'ITALIA_SERVICOS';\n  if (RE_SAUDE.test(t))   return 'SAUDE';\n  if (RE_PROF.test(t))    return 'PERFIL_PROFISSIONAL';\n  return 'GERAL';\n}\n\nfunction calcPriority(hasPhone, hasEmail, hasProfissao, categoria) {\n  let p = 0;\n  if (hasPhone)    p += 3;\n  if (hasEmail)    p += 1;\n  if (hasProfissao) p += 1;\n  if (categoria === 'ITALIA_SERVICOS')    p += 4;\n  if (categoria === 'SAUDE')              p += 2;\n  if (categoria === 'PERFIL_PROFISSIONAL') p += 2;\n  return p;\n}\n\n// --- Processar ---\nconst rows1 = parseCSV(csv1, detectDelimiter(csv1));\nconst rows2 = parseCSV(csv2, detectDelimiter(csv2));\nconst allRows = [...rows1, ...rows2];\n\nconst seen = new Set();\nconst results = [];\n\nfor (const row of allRows) {\n  const nomeRaw = String(row.nome || '').trim();\n  const nome = nomeRaw.replace(/\\s*[|\\-\\u2013\\u2014\\u2022\\/].*$/, '').trim();\n  const telefoneRaw = String(row.telefone || '').trim();\n  const email = String(row.email || '').toLowerCase().trim();\n  const profissao = String(row.profissao || '').trim();\n  const observacao = String(row.observacao || '').trim();\n  const cidade = String(row.cidade || '').trim();\n  const estado = String(row.estado || '').trim();\n\n  if (!telefoneRaw) continue;\n  if (!isValidPhone(telefoneRaw)) continue;\n\n  const telefone = normalizePhone(telefoneRaw);\n  if (!telefone) continue;\n\n  if (seen.has(telefone)) continue;\n  if (!nome) continue;\n\n  const allText = [nome, profissao, observacao, email].join(' ');\n  if (RE_JURIDICO.test(allText))  continue;\n  if (RE_BLOQUEADO.test(allText)) continue;\n\n  seen.add(telefone);\n\n  const categoria = detectCategory(nome, profissao, observacao);\n  const prioridade = calcPriority(!!telefone, !!email, !!profissao, categoria);\n\n  results.push({\n    json: {\n      nome,\n      telefone_original: telefoneRaw,\n      telefone_normalizado: telefone,\n      email: email || null,\n      cidade: cidade || null,\n      estado: estado || null,\n      profissao: profissao || null,\n      observacao: observacao || null,\n      categoria,\n      prioridade\n    }\n  });\n}\n\nreturn results;"
+      },
+      "id": "081d3f76-bc65-47c2-948e-80bfb8a65f08",
+      "name": "Code - Filtrar Leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        784,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 50,
+        "options": {}
+      },
+      "id": "0842bf97-ef8f-43ae-bba3-e27dc5154ce2",
+      "name": "Split Import",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1040,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO velloso.leads (nome, telefone_original, telefone_normalizado, email, cidade, estado, profissao, observacao, categoria, prioridade) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (telefone_normalizado) DO NOTHING",
+        "options": {
+          "queryReplacement": "={{ [$json.nome, $json.telefone_original, $json.telefone_normalizado, $json.email, $json.cidade, $json.estado, $json.profissao, $json.observacao, $json.categoria, $json.prioridade] }}"
+        }
+      },
+      "id": "0c84ea8e-9847-4030-929e-6745b4c66244",
+      "name": "Postgres - Inserir Leads",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1312,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "AziTvrLxMV4KKhI6",
+          "name": "Velloso PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "id": "11782866-d5fe-4ac7-b0ab-0c47e0f31811",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE velloso.leads\nSET status_envio='AGUARDANDO', etapa_envio=0, atualizado_em=NOW()\nWHERE (\n  (status_envio='ERRO_ENVIO'\n     AND data_ultimo_envio < NOW() - INTERVAL '48 hours'\n     AND status_envio NOT IN ('RESPONDEU','BLOQUEADO'))\n  OR\n  (status_envio='ENVIANDO'\n     AND atualizado_em < NOW() - INTERVAL '8 hours')\n)",
+        "options": {}
+      },
+      "id": "25e9cc08-604e-42d9-8406-ef147984c088",
+      "name": "Postgres - Reset Erros",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        528,
+        320
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "AziTvrLxMV4KKhI6",
+          "name": "Velloso PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COUNT(*)::int AS sent_today\nFROM velloso.leads\nWHERE status_envio = 'ENVIADO'\n  AND (data_ultimo_envio AT TIME ZONE 'America/Sao_Paulo')::date\n    = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::date",
+        "options": {}
+      },
+      "id": "828b404f-f433-4abd-b29f-af3f765b417c",
+      "name": "Postgres - Verificar Cota",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        784,
+        320
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "AziTvrLxMV4KKhI6",
+          "name": "Velloso PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-quota",
+              "leftValue": "={{ $json.sent_today }}",
+              "rightValue": 20,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "62b3cf8e-a680-474b-8a87-3790d66d17c5",
+      "name": "IF - Cota OK",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE velloso.leads SET status_envio='ENVIANDO', atualizado_em=NOW()\nWHERE id IN (\n  SELECT id FROM velloso.leads\n  WHERE status_envio='AGUARDANDO'\n    AND EXTRACT(DOW FROM NOW() AT TIME ZONE 'America/Sao_Paulo') BETWEEN 1 AND 5\n    AND EXTRACT(HOUR FROM NOW() AT TIME ZONE 'America/Sao_Paulo') BETWEEN 9 AND 17\n        \n    AND (data_ultimo_envio IS NULL OR data_ultimo_envio < NOW() - INTERVAL '48 hours')\n    AND telefone_normalizado IS NOT NULL\n    AND telefone_normalizado ~ '^[0-9]+$'\n    AND LENGTH(telefone_normalizado) >= 12\n    AND telefone_normalizado NOT IN (\n      SELECT DISTINCT telefone_normalizado FROM velloso.leads\n      WHERE (status_envio = 'ENVIADO'   AND data_ultimo_envio > NOW() - INTERVAL '48 hours')\n         OR (status_envio = 'ENVIANDO'  AND atualizado_em     > NOW() - INTERVAL '8 hours')\n         OR  status_envio IN ('RESPONDEU', 'BLOQUEADO')\n    )\n  ORDER BY prioridade DESC, id ASC\n  LIMIT GREATEST(1, LEAST(10, 20 - (\n    SELECT COUNT(*)::int FROM velloso.leads\n    WHERE status_envio = 'ENVIADO'\n      AND (data_ultimo_envio AT TIME ZONE 'America/Sao_Paulo')::date\n        = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::date\n  )))\n)\nRETURNING id, nome, telefone_normalizado, categoria",
+        "options": {}
+      },
+      "id": "d6b07633-a1bf-46fe-b773-1195af7edecc",
+      "name": "Postgres - Buscar Leads",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1312,
+        304
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "AziTvrLxMV4KKhI6",
+          "name": "Velloso PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-hasleads",
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d3f5a662-f58a-44f9-979c-9ac23e35b988",
+      "name": "IF - Tem Leads",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "d8157fe1-d470-48dd-a6cd-c08e84cbbc94",
+      "name": "Split Envio",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1792,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = [];\nfor (const item of $input.all()) {\n  const tz = 'America/Sao_Paulo';\n  const hora = new Date(new Date().toLocaleString('en-US',{timeZone:tz})).getHours();\n  const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';\n  const categoria = (item.json.categoria || 'GERAL').toUpperCase();\n\n  const nomeCompleto = String(item.json.nome || '').trim();\n  \n  // Lista de palavras que indicam que o nome pode ser uma empresa ou cargo, não uma pessoa\n  const termosEmpresa = /\\b(dentista|clinica|consultorio|advogado|escritorio|engenharia|contabilidade|servicos|solucoes|vendas|comercial|atendimento|suporte|loja|restaurante|oficina|academia|escola|hospital|posto|farmacia|banco|seguros|imobiliaria|condominio|associacao|sindicato|prefeitura|governo|secretaria|ministerio|ong|instituto|fundacao|igreja|paroquia|templo|centro|espaco|studio|atelier|salao|barbearia|estetica|beleza|saude|bem estar|fitness|crossfit|yoga|pilates|fisioterapia|psicologia|nutricao|odonto|medico|veterinaria|pet|agro|construcao|reformas|pinturas|eletrica|hidraulica|ar condicionado|informatica|tecnologia|software|digital|marketing|publicidade|eventos|turismo|viagens|transporte|logistica|mudancas|limpeza|seguranca|portaria|recepcao|telecom|internet|tv|energia|solar|agua|gas|lixo|reciclagem|meio ambiente|sustentabilidade|educacao|cursos|treinamentos|idiomas|musica|danca|teatro|arte|cultura|esporte|lazer|recreacao|infantil|kids|baby|festa|buffet|confeitaria|padaria|mercado|supermercado|hortifruti|acougue|peixaria|bebidas|adega|tabacaria|presentes|flores|floricultura|paisagismo|jardinagem|piscina|churrasco|camping|pesca|caça|armas|militar|policia|bombeiro|justiça|direito|contabil|fiscal|tributario|financeiro|investimentos|credito|emprestimo|consorcio|cambio|bolsa|valores|ativos|patrimonio|herança|familia|sucessao|imovel|terreno|lote|casa|apartamento|sala|galpao|predio|edificio|obra|projeto|planta|desenho|arquitetura|urbanismo|design|interiores|decoracao|moveis|marcenaria|serralheria|vidraçaria|marmoraria|pedras|revestimentos|pisos|azulejos|louças|metais|tintas|ferragens|ferramentas|maquinas|equipamentos|industria|fabrica|usinagem|solda|fundicao|plastico|papel|grafica|editora|comunicacao|midia|jornal|revista|radio|televisao|cinema|fotografia|video|som|luz|palco|cenario|figurino|maquiagem|cabelo|unha|sobrancelha|cílios|tatuagem|piercing|moda|roupas|calçados|acessorios|bolsas|joias|relogios|otica|perfumaria|cosmeticos|higiene|limpeza|utilidades|domesticas|presentes|brinquedos|papelaria|livraria|informatica|celular|tablet|computador|notebook|gamer|games|jogos|diversao|entretenimento|clube|parque|museu|teatro|cinema|show|concerto|festival|carnaval|feriado|viagem|turismo|hotel|pousada|resort|hostel|camping|passagem|aerea|rodoviaria|maritima|cruzeiro|aluguel|veiculos|carros|motos|caminhoes|onibus|vans|barcos|lanchas|jetski|aeronaves|avioes|helicopteros|drones|bicicletas|patinetes|skate|surf|praia|campo|montanha|neve|aventura|radical|natureza|ecoturismo|rural|gastronomia|culinaria|comida|bebida|vinho|cerveja|chopp|drinks|sucos|cafe|cha|doce|salgado|lanche|pizza|hamburguer|sushi|churrasco|massa|peixe|carne|frango|vegetariano|vegano|fit|saudavel|organico|natural|artesanal|caseiro|tradicional|tipico|regional|internacional|italiano|frances|japones|chines|arabe|mexicano|espanhol|portugues|brasileiro|mineiro|baiano|gaucho|nordestino|carioca|paulista)\\b/i;\n\n  const ehEmpresa = termosEmpresa.test(nomeCompleto);\n  \n  // Capitaliza corretamente (ex: JOÃO DA SILVA → João)\n  const partes = nomeCompleto.split(/\\s+/);\n  const primeiroNome = partes[0]\n    ? partes[0].charAt(0).toUpperCase() + partes[0].slice(1).toLowerCase()\n    : '';\n    \n  const telefone = String(item.json.telefone_normalizado || '').replace(/\\D/g,'');\n  \n  // Cumprimento personalizado APENAS se não parecer empresa e tiver nome\n  const cumprimento = (!ehEmpresa && primeiroNome && primeiroNome.length > 2) \n    ? `${saudacao}, ${primeiroNome}` \n    : saudacao;\n\n\n  const rawPool = {\n    \"GERAL\": [\n      `${cumprimento}! 😊\\nA Velloso Cidadania ajuda brasileiros que querem descobrir caminhos reais para a Europa. 🌍\\nMe diz qual dessas opções mais combina com você hoje:\\n\\n🇮🇹 Reconhecer minha cidadania italiana\\n🇪🇸 Entender a cidadania espanhola por residência\\n💼 Trabalhar na Itália ou na Europa\\n🗣️ Aprender italiano\\n📄 Resolver documentos e serviços consulares\\n🔎 Pesquisar minha origem familiar`,\n      `${cumprimento}! 🌍\\nAqui é o Rodrigo, da Velloso Cidadania. Você já pensou em morar ou trabalhar na Europa?\\nA gente ajuda brasileiros a viabilizar isso — desde a pesquisa de antepassados até o processo completo de cidadania italiana. Me conta, tem algum interesse nessa área?`,\n      `${cumprimento}! 😊\\nSabia que muitos brasileiros têm direito à cidadania italiana sem saber? 🇮🇹\\nNa Velloso Cidadania fazemos desde a pesquisa genealógica até o reconhecimento completo.\\nVocê tem descendência italiana ou europeia?`,\n      `${cumprimento}! 🇧🇷🇪🇺\\nAqui é o Rodrigo, da Velloso Cidadania. Trabalho com cidadania europeia e documentos para brasileiros.\\nEstou passando pra saber se você tem algum interesse nessa área — seja pra morar, trabalhar, estudar ou entender suas origens. O que faz mais sentido pra você?`\n    ],\n    \"ITALIA_SERVICOS\": [\n      `${cumprimento}! 😊\\nA Velloso Cidadania ajuda brasileiros em todas as etapas da vida documental com a Itália. 🇮🇹\\nMe diz qual dessas opções mais combina com o seu momento:\\n\\n🇮🇹 Reconhecer minha cidadania italiana\\n🔎 Pesquisar minha origem familiar\\n📄 Regularizar AIRE, passaporte ou CIE\\n👨‍👩‍👧 Registrar a cidadania dos meus filhos\\n🏛️ Entender qual caminho faz sentido para o meu caso`,\n      `${cumprimento}! 🇮🇹\\nAqui é o Rodrigo, da Velloso Cidadania. Vi que você tem interesse em serviços com a Itália!\\nPosso ajudar com documentação, AIRE, passaporte, CIE ou cidadania. Em qual dessas etapas você está hoje?`,\n      `${cumprimento}! 😊\\nQuem tem cidadania italiana sabe que a burocracia não para por aí! 🇮🇹📄\\nNa Velloso Cidadania damos suporte em AIRE, passaporte, CIE e também na extensão da cidadania para filhos.\\nPosso te ajudar com alguma dessas etapas?`\n    ],\n    \"SAUDE\": [\n      `${cumprimento}! 😊\\nA Velloso Cidadania ajuda profissionais da saúde que querem construir oportunidades reais na Europa. 🏥🇪🇺\\nMe diz qual dessas opções mais combina com você hoje:\\n\\n💼 Trabalhar na Itália como profissional da saúde\\n🌍 Entender oportunidades na Europa para minha área\\n📄 Ver qual caminho documental faz mais sentido para mim\\n🗣️ Aprender italiano para ampliar minhas chances\\n🇮🇹 Avaliar se tenho direito à cidadania por descendência`,\n      `${cumprimento}! 🏥\\nAqui é o Rodrigo, da Velloso Cidadania. A demanda por profissionais de saúde brasileiros na Europa tem crescido bastante — especialmente na Itália.\\nVocê já considerou trabalhar por lá? Me conta o que você faz e posso te mostrar como outros profissionais têm feito esse caminho.`,\n      `${cumprimento}! 😊\\nSabia que profissionais de saúde brasileiros têm boas oportunidades na Itália e em Portugal? 🇮🇹🇵🇹\\nNa Velloso Cidadania ajudamos desde a parte documental até a cidadania por descendência, que pode abrir ainda mais portas. O que faz mais sentido pra você?`\n    ],\n    \"PERFIL_PROFISSIONAL\": [\n      `${cumprimento}! 😊\\nA Velloso Cidadania ajuda brasileiros que querem transformar experiência profissional em oportunidade na Europa. 💼🇪🇺\\nMe diz qual dessas opções mais combina com seu momento:\\n\\n💼 Trabalhar na Europa com meu perfil profissional\\n📍 Buscar recolocação na Itália, Espanha ou Portugal\\n🗣️ Aprender italiano para abrir novas portas\\n🇮🇹 Ver se existe caminho por cidadania\\n🧭 Entender qual rota combina mais com meu objetivo`,\n      `${cumprimento}! 💼\\nAqui é o Rodrigo, da Velloso Cidadania. Tenho visto muitos profissionais brasileiros qualificados fazendo a transição para a Europa — a demanda por lá está alta.\\nVocê já considerou trabalhar na Itália ou em outro país europeu?`,\n      `${cumprimento}! 🇧🇷🇪🇺\\nSabia que brasileiros com boa experiência profissional têm boas chances de recolocação na Europa?\\nNa Velloso Cidadania ajudamos com o planejamento — seja pela cidadania italiana, visto de trabalho ou busca de oportunidades diretas. Por onde você quer começar?`\n    ]\n  };\n\n  const variants = rawPool[categoria] || rawPool.GERAL;\n  const mensagem = variants[Math.floor(Math.random() * variants.length)];\n  results.push({ json: { id: item.json.id, nome: nomeCompleto, telefone_normalizado: telefone, categoria, mensagem } });\n}\nreturn results;"
+      },
+      "id": "cb2660da-80c0-4a2b-97fb-6f05ee995697",
+      "name": "Code - Montar Mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "amount": "30"
+      },
+      "id": "59a2a6a5-821e-4f40-b312-8739abd87686",
+      "name": "Wait Aleatório",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2352,
+        320
+      ],
+      "webhookId": "velloso-wait-envio-1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chaoticcow-evolution.cloudfy.live/message/sendText/Rodrigo",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "hucK88FXjn9xwsHJaimmxxvMnZ1Bzwkb"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $('Code - Montar Mensagem').item.json.telefone_normalizado }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $('Code - Montar Mensagem').item.json.mensagem }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "a6b8f205-42b4-4a19-981b-44e7b87f825c",
+      "name": "HTTP - Enviar WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2608,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-evol-ok",
+              "leftValue": "={{ $json && $json.body && $json.body.key && $json.body.key.id ? true : false }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "8a80daa0-f99f-4779-bd68-1aba89836b1e",
+      "name": "IF - Envio OK",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2864,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE velloso.leads SET status_envio='ENVIADO', data_ultimo_envio=NOW(), proximo_followup=NOW()+INTERVAL '24 hours', etapa_envio=1, atualizado_em=NOW() WHERE id=$1 RETURNING nome, telefone_normalizado, categoria",
+        "options": {
+          "queryReplacement": "={{ [$('Code - Montar Mensagem').item.json.id] }}"
+        }
+      },
+      "id": "e1df5ef6-77c1-4a69-83de-48aed0c73157",
+      "name": "Postgres - Marcar Enviado",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3120,
+        240
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "AziTvrLxMV4KKhI6",
+          "name": "Velloso PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE velloso.leads SET status_envio='ERRO_ENVIO', data_ultimo_envio=NOW(), atualizado_em=NOW() WHERE id=$1 RETURNING nome, telefone_normalizado, categoria",
+        "options": {
+          "queryReplacement": "={{ [$('Code - Montar Mensagem').item.json.id] }}"
+        }
+      },
+      "id": "f42817a4-856c-48d2-8fa9-a2e61daae158",
+      "name": "Postgres - Marcar Erro",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3104,
+        464
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "AziTvrLxMV4KKhI6",
+          "name": "Velloso PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT GREATEST(0, 20 - (\n  SELECT COUNT(*)::int FROM velloso.leads\n  WHERE status_envio = 'ENVIADO'\n    AND (data_ultimo_envio AT TIME ZONE 'America/Sao_Paulo')::date\n      = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::date\n)) AS needed",
+        "options": {}
+      },
+      "id": "38092ef1-58b8-4061-8b89-d4c7d26e961c",
+      "name": "Postgres - Calcular Reposição",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1920,
+        704
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "AziTvrLxMV4KKhI6",
+          "name": "Velloso PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const row = $input.first().json;\nconst needed = parseInt(row.needed) || 0;\n// Busca até 10 leads por ciclo para não sobrecarregar — o loop repete até bater 20\nconst replaceCount = Math.min(needed, 10);\nreturn [{ json: { replace_count: replaceCount, needed } }];"
+      },
+      "id": "0d84a0da-fadf-4144-96b0-287e49a7308e",
+      "name": "Code - Calc Reposição",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2128,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-rep",
+              "leftValue": "={{ $json.replace_count }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4c82139e-a0db-446c-9b4a-23e81c24921b",
+      "name": "IF - Precisa Reposição",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2352,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE velloso.leads SET status_envio='ENVIANDO', atualizado_em=NOW()\nWHERE id IN (\n  SELECT id FROM velloso.leads\n  WHERE status_envio='AGUARDANDO'\n    AND (data_ultimo_envio IS NULL OR data_ultimo_envio < NOW() - INTERVAL '48 hours')\n    AND telefone_normalizado IS NOT NULL\n    AND telefone_normalizado ~ '^[0-9]+$'\n    AND LENGTH(telefone_normalizado) >= 12\n    AND telefone_normalizado NOT IN (\n      SELECT DISTINCT telefone_normalizado FROM velloso.leads\n      WHERE (status_envio = 'ENVIADO'   AND data_ultimo_envio > NOW() - INTERVAL '48 hours')\n         OR (status_envio = 'ENVIANDO'  AND atualizado_em     > NOW() - INTERVAL '8 hours')\n         OR  status_envio IN ('RESPONDEU', 'BLOQUEADO')\n    )\n  ORDER BY prioridade DESC, id ASC\n  LIMIT LEAST(5, GREATEST(0, 20 - (\n    SELECT COUNT(*)::int FROM velloso.leads\n    WHERE status_envio = 'ENVIADO'\n      AND (data_ultimo_envio AT TIME ZONE 'America/Sao_Paulo')::date\n        = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::date\n  )))\n)\nRETURNING id, nome, telefone_normalizado, categoria",
+        "options": {}
+      },
+      "id": "307fdd30-6bf7-4f98-aab1-f5dd2b890b59",
+      "name": "Postgres - Buscar Reposição",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2624,
+        672
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "AziTvrLxMV4KKhI6",
+          "name": "Velloso PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-hasrep-len",
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            },
+            {
+              "id": "cond-hasrep-id",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "01ee7b2f-f1af-4a0e-a35d-cb0daaca475c",
+      "name": "IF - Tem Reposição",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2864,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "9ca1fa1c-e833-44da-a8f2-5348af9db512",
+      "name": "Split Reposição",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        3312,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  (SELECT COUNT(*)::int FROM velloso.leads WHERE status_envio = 'AGUARDANDO') AS aguardando,\n  (SELECT COUNT(*)::int FROM velloso.leads WHERE status_envio = 'ENVIADO') AS enviado_total,\n  (SELECT COUNT(*)::int FROM velloso.leads\n   WHERE status_envio = 'ENVIADO'\n     AND (data_ultimo_envio AT TIME ZONE 'America/Sao_Paulo')::date\n       = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::date\n  ) AS enviado_hoje,\n  (SELECT COUNT(*)::int FROM velloso.leads WHERE status_envio = 'ERRO_ENVIO') AS erro,\n  NOW() AT TIME ZONE 'America/Sao_Paulo' AS atualizado_em",
+        "options": {}
+      },
+      "id": "2cfdb3e4-2df4-4344-9f24-15309eb7f221",
+      "name": "Postgres - Gerar Relatório",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3472,
+        1248
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "AziTvrLxMV4KKhI6",
+          "name": "Velloso PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const row = $input.first().json;\nconst dt = new Date(row.atualizado_em);\nconst data = dt.toLocaleDateString('pt-BR');\nconst hora = dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});\nconst total = (parseInt(row.aguardando)||0) + (parseInt(row.enviado_total)||0) + (parseInt(row.erro)||0);\nreturn [{ json: {\n  data,\n  hora,\n  aguardando:    row.aguardando,\n  enviado_total: row.enviado_total,\n  enviado_hoje:  row.enviado_hoje,\n  erro:          row.erro,\n  total\n} }];"
+      },
+      "id": "8d9b93b3-271d-437e-83ac-1f58337f2ea8",
+      "name": "Code - Formatar Relatório",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3680,
+        1248
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1kS1mU-bo9KL-XoL3g2ktSr-ICUOBu2ZJTPmqyo73MrM",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Resumo Diario",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "data",
+              "displayName": "data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "hora",
+              "displayName": "hora",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "aguardando",
+              "displayName": "aguardando",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "enviado_total",
+              "displayName": "enviado_total",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "enviado_hoje",
+              "displayName": "enviado_hoje",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "erro",
+              "displayName": "erro",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "total",
+              "displayName": "total",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "89b361d2-cd34-4185-8288-4977644f55f1",
+      "name": "Google Sheets - Salvar Relatório",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        4048,
+        1440
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "dYDdEMYqDDR0ekh3",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        400
+      ],
+      "id": "4d581131-2d89-4733-b158-c6ef50ebe352",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1kS1mU-bo9KL-XoL3g2ktSr-ICUOBu2ZJTPmqyo73MrM",
+          "mode": "list",
+          "cachedResultName": "Relatorio diario ",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1kS1mU-bo9KL-XoL3g2ktSr-ICUOBu2ZJTPmqyo73MrM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1918898961,
+          "mode": "list",
+          "cachedResultName": "Envios de Hoje",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1kS1mU-bo9KL-XoL3g2ktSr-ICUOBu2ZJTPmqyo73MrM/edit#gid=1918898961"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "nome": "={{ $('Code - Montar Mensagem').item.json.nome }}",
+            "telefone_normalizado": "={{ $('Code - Montar Mensagem').item.json.telefone_normalizado }}",
+            "status_envio": "ENVIADO",
+            "horario": "={{ $now.setZone('America/Sao_Paulo').toFormat('HH:mm') }}",
+            "categoria": "={{ $('Code - Montar Mensagem').item.json.categoria }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "nome",
+              "displayName": "nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "telefone_normalizado",
+              "displayName": "telefone_normalizado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_envio",
+              "displayName": "status_envio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "horario",
+              "displayName": "horario",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "categoria",
+              "displayName": "categoria",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3328,
+        240
+      ],
+      "id": "cc0f8432-e326-4b79-ba47-a2470b7b42bc",
+      "name": "Google Sheets - Log Enviado",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "dYDdEMYqDDR0ekh3",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1kS1mU-bo9KL-XoL3g2ktSr-ICUOBu2ZJTPmqyo73MrM",
+          "mode": "list",
+          "cachedResultName": "Relatorio diario ",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1kS1mU-bo9KL-XoL3g2ktSr-ICUOBu2ZJTPmqyo73MrM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1918898961,
+          "mode": "list",
+          "cachedResultName": "Envios de Hoje",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1kS1mU-bo9KL-XoL3g2ktSr-ICUOBu2ZJTPmqyo73MrM/edit#gid=1918898961"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "nome": "={{ $('Code - Montar Mensagem').item.json.nome }}",
+            "telefone_normalizado": "={{ $('Code - Montar Mensagem').item.json.telefone_normalizado }}",
+            "status_envio": "ERRO_ENVIO",
+            "horario": "={{ $now.setZone('America/Sao_Paulo').toFormat('HH:mm') }}",
+            "categoria": "={{ $('Code - Montar Mensagem').item.json.categoria }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "nome",
+              "displayName": "nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "telefone_normalizado",
+              "displayName": "telefone_normalizado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_envio",
+              "displayName": "status_envio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "horario",
+              "displayName": "horario",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "categoria",
+              "displayName": "categoria",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3328,
+        464
+      ],
+      "id": "48de9ba6-7461-4a10-963e-1362fd3d51ef",
+      "name": "Google Sheets - Log Erro",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "dYDdEMYqDDR0ekh3",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chaoticcow-evolution.cloudfy.live/message/sendText/Rodrigo",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "hucK88FXjn9xwsHJaimmxxvMnZ1Bzwkb"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "5511970251788"
+            },
+            {
+              "name": "text",
+              "value": "⚠️ *Velloso Bot:* Sem leads disponíveis para envio. Importe novos leads para continuar."
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "53dfba3d-04db-4c45-80eb-bfe0b50eeb92",
+      "name": "HTTP - Notificar Sem Leads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3200,
+        1056
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chaoticcow-evolution.cloudfy.live/message/sendText/Rodrigo",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "hucK88FXjn9xwsHJaimmxxvMnZ1Bzwkb"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "5511970251788"
+            },
+            {
+              "name": "text",
+              "value": "✅ *Velloso Bot:* Cota diária de 20 envios atingida. Até amanhã!"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "43c60664-9e41-4fd1-a1ec-b0d50af8f4ce",
+      "name": "HTTP - Notificar Cota Atingida",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1280,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE velloso.leads\nSET status_envio = 'BLOQUEADO'\nWHERE status_envio = 'AGUARDANDO'\nAND NOT (\n  -- Celular brasileiro: 55 + DDD + 9 + 8 digitos = 13 chars\n  (LENGTH(telefone_normalizado) = 13\n   AND SUBSTRING(telefone_normalizado, 5, 1) = '9')\n  OR\n  -- Fixo brasileiro: 55 + DDD + [2-5] + 7 digitos = 12 chars\n  (LENGTH(telefone_normalizado) = 12\n   AND SUBSTRING(telefone_normalizado, 5, 1) BETWEEN '2' AND '5')\n)",
+        "options": {}
+      },
+      "id": "28a438d4-5e30-4cf5-b379-817d6e55ace8",
+      "name": "Postgres - Limpar Números Inválidos",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        144,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "AziTvrLxMV4KKhI6",
+          "name": "Velloso PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 * * *"
+            }
+          ]
+        }
+      },
+      "id": "44fad2f0-1a4d-44d1-b47f-528b6ea948dc",
+      "name": "Schedule - Meia Noite",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -496,
+        1600
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "clear",
+        "documentId": {
+          "__rl": true,
+          "value": "1kS1mU-bo9KL-XoL3g2ktSr-ICUOBu2ZJTPmqyo73MrM",
+          "mode": "list",
+          "cachedResultName": "Relatorio diario",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1kS1mU-bo9KL-XoL3g2ktSr-ICUOBu2ZJTPmqyo73MrM/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1918898961,
+          "mode": "list",
+          "cachedResultName": "Envios de Hoje",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1kS1mU-bo9KL-XoL3g2ktSr-ICUOBu2ZJTPmqyo73MrM/edit#gid=1918898961"
+        }
+      },
+      "id": "43485176-a61f-41dc-989d-6944368e169c",
+      "name": "Sheets - Limpar Envios",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -208,
+        1600
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "dYDdEMYqDDR0ekh3",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: {\n  nome: \"nome\",\n  telefone_normalizado: \"telefone_normalizado\",\n  status_envio: \"status_envio\",\n  horario: \"horario\",\n  categoria: \"categoria\"\n} }];"
+      },
+      "id": "ce496588-3cdb-4c52-99f9-ff9f2da67af4",
+      "name": "Code - Cabecalho Envios",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        112,
+        1600
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1kS1mU-bo9KL-XoL3g2ktSr-ICUOBu2ZJTPmqyo73MrM",
+          "mode": "list",
+          "cachedResultName": "Relatorio diario",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1kS1mU-bo9KL-XoL3g2ktSr-ICUOBu2ZJTPmqyo73MrM/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1918898961,
+          "mode": "list",
+          "cachedResultName": "Envios de Hoje",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1kS1mU-bo9KL-XoL3g2ktSr-ICUOBu2ZJTPmqyo73MrM/edit#gid=1918898961"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "nome": "nome",
+            "telefone_normalizado": "telefone_normalizado",
+            "status_envio": "status_envio",
+            "horario": "horario",
+            "categoria": "categoria"
+          },
+          "matchingColumns": [
+            "nome"
+          ],
+          "schema": [
+            {
+              "id": "nome",
+              "displayName": "nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "telefone_normalizado",
+              "displayName": "telefone_normalizado",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status_envio",
+              "displayName": "status_envio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "horario",
+              "displayName": "horario",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "categoria",
+              "displayName": "categoria",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "e2d87298-e93f-4eee-970e-14c0104d4c05",
+      "name": "Sheets - Recriar Cabecalho",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        400,
+        1600
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "dYDdEMYqDDR0ekh3",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chaoticcow-evolution.cloudfy.live/chat/whatsappNumbers/Rodrigo",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "hucK88FXjn9xwsHJaimmxxvMnZ1Bzwkb"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"numbers\": [\"{{ $('Code - Montar Mensagem').item.json.telefone_normalizado }}\"]}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "09e86a14-5daa-4969-a7da-a60f0084bec1",
+      "name": "HTTP - Validar Numero",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2224,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-not-explicit-false",
+              "leftValue": "={{ Array.isArray($json) ? !($json[0] && $json[0].exists === false) : !($json && $json.exists === false) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "9f0c6741-e114-4941-b74e-8bca50d34bd6",
+      "name": "IF - Numero Existe",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2416,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chaoticcow-evolution.cloudfy.live/chat/sendPresence/Rodrigo",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "hucK88FXjn9xwsHJaimmxxvMnZ1Bzwkb"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={$('Code - Montar Mensagem').item.json.telefone_normalizado}"
+            },
+            {
+              "name": "presence",
+              "value": "composing"
+            },
+            {
+              "name": "delay",
+              "value": "={{ Math.floor(Math.random() * (12000 - 5000 + 1)) + 5000 }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "ffb061c1-a232-46a2-8d88-bb91fc42325c",
+      "name": "HTTP - Presença 1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        0
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Postgres - Limpar Números Inválidos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres - Limpar Números Inválidos": {
+      "main": [
+        [
+          {
+            "node": "HTTP - CSV Principal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - CSV Principal": {
+      "main": [
+        [
+          {
+            "node": "HTTP - CSV Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - CSV Sheets": {
+      "main": [
+        [
+          {
+            "node": "Code - Filtrar Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Filtrar Leads": {
+      "main": [
+        [
+          {
+            "node": "Split Import",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Import": {
+      "main": [
+        [
+          {
+            "node": "Postgres - Inserir Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres - Inserir Leads": {
+      "main": [
+        [
+          {
+            "node": "Split Import",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Postgres - Reset Erros",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres - Reset Erros": {
+      "main": [
+        [
+          {
+            "node": "Postgres - Verificar Cota",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres - Verificar Cota": {
+      "main": [
+        [
+          {
+            "node": "IF - Cota OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Cota OK": {
+      "main": [
+        [
+          {
+            "node": "Postgres - Buscar Leads",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP - Notificar Cota Atingida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Notificar Cota Atingida": {
+      "main": [
+        [
+          {
+            "node": "Postgres - Gerar Relatório",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres - Buscar Leads": {
+      "main": [
+        [
+          {
+            "node": "IF - Tem Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Tem Leads": {
+      "main": [
+        [
+          {
+            "node": "Split Envio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Postgres - Calcular Reposição",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Envio": {
+      "main": [
+        [
+          {
+            "node": "Postgres - Calcular Reposição",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code - Montar Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Montar Mensagem": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Validar Numero",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Enviar WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "IF - Envio OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Envio OK": {
+      "main": [
+        [
+          {
+            "node": "Postgres - Marcar Enviado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Postgres - Marcar Erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres - Marcar Enviado": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Log Enviado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Log Enviado": {
+      "main": [
+        [
+          {
+            "node": "Split Envio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres - Marcar Erro": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Log Erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Log Erro": {
+      "main": [
+        [
+          {
+            "node": "Split Envio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres - Calcular Reposição": {
+      "main": [
+        [
+          {
+            "node": "Code - Calc Reposição",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Calc Reposição": {
+      "main": [
+        [
+          {
+            "node": "IF - Precisa Reposição",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Precisa Reposição": {
+      "main": [
+        [
+          {
+            "node": "Postgres - Buscar Reposição",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Postgres - Gerar Relatório",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres - Buscar Reposição": {
+      "main": [
+        [
+          {
+            "node": "IF - Tem Reposição",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Tem Reposição": {
+      "main": [
+        [
+          {
+            "node": "Split Reposição",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP - Notificar Sem Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Notificar Sem Leads": {
+      "main": [
+        [
+          {
+            "node": "Postgres - Gerar Relatório",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Reposição": {
+      "main": [
+        [
+          {
+            "node": "Postgres - Calcular Reposição",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code - Montar Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres - Gerar Relatório": {
+      "main": [
+        [
+          {
+            "node": "Code - Formatar Relatório",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Formatar Relatório": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Salvar Relatório",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule - Meia Noite": {
+      "main": [
+        [
+          {
+            "node": "Sheets - Limpar Envios",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sheets - Limpar Envios": {
+      "main": [
+        [
+          {
+            "node": "Code - Cabecalho Envios",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Cabecalho Envios": {
+      "main": [
+        [
+          {
+            "node": "Sheets - Recriar Cabecalho",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Validar Numero": {
+      "main": [
+        [
+          {
+            "node": "IF - Numero Existe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Numero Existe": {
+      "main": [
+        [
+          {
+            "node": "Wait Aleatório",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Postgres - Marcar Erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Aleatório": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Presença 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Presença 1": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Enviar WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "timezone": "America/Sao_Paulo",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
+  },
+  "versionId": "53752bf1-1e0a-49ea-9a7e-6596764354be",
+  "meta": {
+    "instanceId": "8409389cc070f8df7956df2f867167ac636a9342e2c163236de218dab6954487"
+  },
+  "id": "0Fn6pVMiBaNijRz4",
+  "tags": []
+}
